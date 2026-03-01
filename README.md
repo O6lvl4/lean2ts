@@ -1,20 +1,70 @@
 <p align="right"><a href="README.ja.md">日本語</a></p>
 
-# lean2ts
+<h1 align="center">lean2ts</h1>
 
-**Prove it in Lean. Test it in TypeScript.**
+<p align="center">
+<strong>Prove it in Lean. Test it in TypeScript.</strong>
+</p>
 
-lean2ts converts Lean 4 formal specifications into TypeScript code. Theorems become property-based tests. Structures become interfaces. Inductive types become discriminated unions. You write business rules in Lean, prove them mathematically, and lean2ts brings those guarantees into your TypeScript codebase as automated tests.
+<p align="center">
+lean2ts converts <a href="https://lean-lang.org/">Lean 4</a> formal specifications into TypeScript — types, function stubs, and <a href="https://github.com/dubzzz/fast-check">fast-check</a> property tests.
+Write your business rules in Lean, prove them mathematically, and let lean2ts bring those guarantees into your TypeScript codebase as automated tests.
+</p>
 
-## The Problem
+<p align="center">
+<img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
+<img src="https://img.shields.io/badge/lean-4-blueviolet" alt="Lean 4">
+<img src="https://img.shields.io/badge/TypeScript-5.7-blue" alt="TypeScript">
+<img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node 22+">
+</p>
 
-You write a discount function. It looks correct. It passes your hand-written unit tests. Then one day, a customer gets charged -$1.50. The discount exceeded the price, and JavaScript happily returned a negative number.
+---
 
-Lean's natural numbers can't go negative. If you prove your business rules in Lean, that class of bugs is impossible. But your production code is in TypeScript. lean2ts bridges that gap.
+## Why?
+
+You write a discount function. It passes unit tests. Then one day, a customer gets charged **-$1.50** — the discount exceeded the price, and JavaScript happily returned a negative number.
+
+Lean's natural numbers *can't go negative*. If you prove your business rules in Lean, that class of bugs is impossible. But your production code is TypeScript. **lean2ts bridges that gap.**
+
+```
+                    ┌─────────────────────────┐
+  pricing.lean      │  Lean 4 compiler        │
+  ─────────────────▶│  Proves theorems ✓      │
+                    └──────────┬──────────────┘
+                               │
+                    ┌──────────▼──────────────┐
+  npx lean2ts       │  lean2ts                │
+  ─────────────────▶│  Generates TypeScript   │
+                    └──────────┬──────────────┘
+                               │
+               ┌───────────────┼───────────────┐
+               ▼               ▼               ▼
+          types.ts        stubs.ts     properties.test.ts
+       (interfaces,    (function      (theorems become
+        unions)         signatures)    fast-check tests)
+```
+
+---
+
+## Quick Start
+
+```bash
+npx lean2ts pricing.lean -o ./generated
+```
+
+This reads a Lean file, talks to [Pantograph](https://github.com/lenianiva/Pantograph) to extract declarations, and writes TypeScript files.
+
+### Prerequisites
+
+- **Node.js 22+**
+- **[Lean 4](https://lean-lang.org/lean4/doc/setup.html)**
+- **[Pantograph](https://github.com/lenianiva/Pantograph)** — Lean's programmatic interface
+
+---
 
 ## See It in Action
 
-### Step 1: Write your spec in Lean
+### 1. Write your spec in Lean
 
 ```lean
 inductive Discount where
@@ -28,7 +78,7 @@ def applyDiscount (amount : Nat) (d : Discount) : Nat :=
   | .percent rate => amount - amount * rate / 100
   | .fixed v => amount - v
 
--- Prove: discount can never exceed the original amount
+-- Prove: discount never exceeds the original price
 theorem discount_bounded (amount : Nat) (d : Discount) :
     applyDiscount amount d ≤ amount := by
   cases d <;> simp [applyDiscount] <;> omega
@@ -38,17 +88,15 @@ theorem discount_nonneg (amount : Nat) (d : Discount) :
     0 ≤ applyDiscount amount d := by omega
 ```
 
-Lean verifies these theorems at compile time. If it compiles, the proofs are correct.
+If it compiles, the proofs are correct. No runtime needed.
 
-### Step 2: Generate TypeScript
+### 2. Generate TypeScript
 
 ```bash
 npx lean2ts pricing.lean
 ```
 
-This produces four files:
-
-**types.ts** — Type-safe discriminated unions
+**types.ts** — Discriminated unions from inductive types:
 
 ```typescript
 export type Discount =
@@ -57,7 +105,7 @@ export type Discount =
   | { readonly tag: "fixed"; readonly amount: number };
 ```
 
-**stubs.ts** — Function signatures for you to implement
+**stubs.ts** — Function signatures to implement:
 
 ```typescript
 export function applyDiscount(amount: number, d: Discount): number {
@@ -66,21 +114,21 @@ export function applyDiscount(amount: number, d: Discount): number {
 }
 ```
 
-**properties.test.ts** — Theorems become property tests
+**properties.test.ts** — Theorems become property tests:
 
 ```typescript
-it("discountNonneg", () => {
+it("discountBounded", () => {
   fc.assert(
     fc.property(fc.nat(), arbDiscount, (amount, d) => {
-      return 0 <= applyDiscount(amount, d);
+      return applyDiscount(amount, d) <= amount;
     })
   );
 });
 ```
 
-### Step 3: Write your implementation
+### 3. Implement and test
 
-You implement the function naively:
+Write a naive implementation:
 
 ```typescript
 case "percent": return amount - (amount * d.rate / 100);
@@ -91,39 +139,37 @@ Run the tests:
 
 ```
 FAIL  discountNonneg
-  Counterexample: [1, {"tag":"percent","rate":200}]
+  Counterexample: [1, { tag: "percent", rate: 200 }]
   applyDiscount(1, { tag: "percent", rate: 200 }) => -1
 ```
 
-The test caught it instantly. A 200% discount on $1 gives -$1 in JavaScript, but Lean's `Nat` subtraction floors at zero. The fix:
+A 200% discount on $1 gives -$1 in JavaScript, but Lean's `Nat` subtraction floors at zero. Fix:
 
 ```typescript
 case "percent": return Math.max(0, amount - Math.floor(amount * d.rate / 100));
 case "fixed":   return Math.max(0, amount - d.amount);
 ```
 
-**Lean's proof told you exactly what your TypeScript implementation must guarantee.** The bug was found before it ever reached production.
+**Lean's proof told you exactly what your implementation must guarantee.** The bug was found before it reached production.
 
-> Full example: [`examples/pricing/`](examples/pricing/)
+> Full source: [`examples/pricing/`](examples/pricing/)
 
 ---
 
 ## What Gets Generated
 
-```
-Lean 4 source (.lean)
-  |
-  |-- structure        =>  interface
-  |-- inductive        =>  discriminated union + type guards
-  |-- theorem          =>  fast-check property test
-  |-- def              =>  function stub
-  |
-  \-- sorry            =>  auto-proved via LLM + Pantograph
-```
+| Lean construct | TypeScript output | File |
+|---|---|---|
+| `structure` | `interface` | types.ts |
+| `inductive` | Discriminated union + type guards | types.ts |
+| `theorem` | fast-check property test | properties.test.ts |
+| `def` | Function stub | stubs.ts |
+| Type parameters | Generic arbitraries (factory functions) | arbitraries.ts |
+| `sorry` | Auto-proved via LLM + Pantograph | — |
 
 ### Type Mapping
 
-| Lean | TypeScript | fast-check |
+| Lean | TypeScript | fast-check arbitrary |
 |---|---|---|
 | `Nat` | `number` | `fc.nat()` |
 | `Int` | `number` | `fc.integer()` |
@@ -135,7 +181,7 @@ Lean 4 source (.lean)
 
 ### Generics
 
-Type parameters carry over naturally.
+Type parameters carry over naturally:
 
 ```lean
 structure Wrapper (α : Type) where
@@ -149,7 +195,6 @@ export interface Wrapper<α> {
   readonly label: string;
 }
 
-// Generic arbitraries become factory functions
 export function arbWrapper<α>(arbα: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α>> {
   return fc.record({ value: arbα, label: fc.string() });
 }
@@ -159,145 +204,179 @@ export function arbWrapper<α>(arbα: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α
 
 ## Examples
 
-| Example | What it demonstrates |
-|---|---|
-| [`point/`](examples/point/) | The basics — struct, function, theorem |
-| [`color-shape/`](examples/color-shape/) | Inductive types as discriminated unions |
-| [`generics/`](examples/generics/) | Type parameters and factory arbitraries |
-| [`pricing/`](examples/pricing/) | Business rules that catch real bugs |
-| [`scoring/`](examples/scoring/) | Commutativity and monotonicity in score aggregation |
-| [`inventory/`](examples/inventory/) | Conservation laws in stock management |
+| Example | Demonstrates | Theorems |
+|---|---|:---:|
+| [`point/`](examples/point/) | Struct, function, basic theorem | 1 |
+| [`color-shape/`](examples/color-shape/) | Inductive types as discriminated unions | — |
+| [`generics/`](examples/generics/) | Type parameters and factory arbitraries | 1 |
+| [`pricing/`](examples/pricing/) | **Business rules that catch real bugs** | 4 |
+| [`weather/`](examples/weather/) | Alert levels, precipitation, buggy vs correct impl | 8 |
+| [`scoring/`](examples/scoring/) | Commutativity and monotonicity | 5 |
+| [`inventory/`](examples/inventory/) | Conservation laws in stock management | 6 |
+| [`inquiry-state/`](examples/inquiry-state/) | 11-state machine with transition proofs | 8 |
+
+Each example contains a `.lean` source and a `generated/` directory with the TypeScript output.
 
 ---
 
 ## Auto-Proving `sorry`
 
-lean2ts can automatically fill in `sorry` (proof holes) using LLM-generated tactics verified by Pantograph.
+Lean lets you write `sorry` as a placeholder for proofs you haven't finished yet. lean2ts can fill these in automatically using an LLM to propose tactics, verified by Pantograph.
 
 ```bash
-export CLOUDFLARE_ACCOUNT_ID=xxx
-export CLOUDFLARE_API_TOKEN=xxx
-
 npx lean2ts prove input.lean --verbose
 ```
 
 ```
-[prove] trying "rfl" for add_zero (attempt 1)
-[prove] success: add_zero proved with "rfl"
-[prove] trying "simp" for zero_add (attempt 2)
-[prove] success: zero_add proved with "simp"
+[prove] trying "rfl" for add_zero …
+[prove] ✓ add_zero proved with "rfl"
+[prove] trying "simp" for zero_add …
+[prove] ✓ zero_add proved with "simp"
 
-[prove] all sorries resolved in 3 attempt(s)
+All sorries resolved (3 attempts)
 ```
+
+The LLM proposes candidate tactics. Pantograph checks each one against Lean's kernel. If it passes, the proof is sound — no trust in the LLM required.
+
+### LLM Providers
+
+Any OpenAI-compatible API works. Set environment variables and lean2ts auto-detects the provider:
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-... npx lean2ts prove input.lean
+
+# Cloudflare Workers AI
+CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... npx lean2ts prove input.lean
+
+# Groq, Together, Fireworks, etc.
+LLM_BASE_URL=https://api.groq.com/openai/v1 LLM_API_KEY=gsk-... \
+  npx lean2ts prove input.lean --model llama-3.3-70b-versatile
+
+# Ollama (local)
+LLM_BASE_URL=http://localhost:11434/v1 \
+  npx lean2ts prove input.lean --model deepseek-r1:32b
+```
+
+| Environment Variable | Provider |
+|---|---|
+| `OPENAI_API_KEY` | OpenAI |
+| `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI |
+| `LLM_BASE_URL` + `LLM_API_KEY` [+ `LLM_MODEL`] | Any OpenAI-compatible |
 
 ---
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 22+
-- [Lean 4](https://leanprover.github.io/lean4/doc/setup.html)
-- [Pantograph](https://github.com/lenianiva/Pantograph)
-
-### Install
-
-```bash
-npm install
-npm run build
-```
-
-### Run
-
-```bash
-# Generate TypeScript from Lean
-npx lean2ts input.lean -o ./generated
-
-# Dry run (prints to stdout)
-npx lean2ts input.lean --dry-run
-
-# Auto-prove sorries
-npx lean2ts prove input.lean --verbose
-```
 
 ## CLI Reference
 
 ### `lean2ts <input.lean> [options]`
 
+Generate TypeScript from a Lean file.
+
 | Option | Description | Default |
 |---|---|---|
 | `-o, --out <dir>` | Output directory | `./generated` |
-| `--pantograph <path>` | Path to pantograph-repl | `pantograph-repl` |
-| `--modules <names...>` | Lean modules to load | — |
+| `--pantograph <path>` | Path to pantograph-repl binary | `pantograph-repl` |
+| `--modules <names...>` | Additional Lean modules to load | — |
 | `--no-tests` | Skip test generation | — |
 | `--no-stubs` | Skip stub generation | — |
 | `--verbose` | Verbose logging | — |
-| `--dry-run` | Print to stdout, don't write files | — |
+| `--dry-run` | Print to stdout instead of writing files | — |
 
 ### `lean2ts prove <input.lean> [options]`
 
+Automatically prove `sorry` holes.
+
 | Option | Description | Default |
 |---|---|---|
-| `--model <name>` | LLM model | `@cf/deepseek-ai/deepseek-r1-distill-qwen-32b` |
-| `--pantograph <path>` | Path to pantograph-repl | `pantograph-repl` |
-| `--lean-path <path>` | LEAN_PATH | — |
-| `--max-attempts <n>` | Max retry attempts | `3` |
+| `--model <name>` | LLM model for tactic generation | auto |
+| `--base-url <url>` | OpenAI-compatible API base URL | auto |
+| `--api-key <key>` | API key for the LLM provider | auto |
+| `--pantograph <path>` | Path to pantograph-repl binary | `pantograph-repl` |
+| `--lean-path <path>` | LEAN_PATH for module resolution | — |
+| `--max-attempts <n>` | Max tactic attempts per sorry | `3` |
 | `--verbose` | Verbose logging | — |
 
-### Environment Variables (prove)
+---
 
-| Variable | Description |
-|---|---|
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_API_TOKEN` | API token |
-| `CLOUDFLARE_API_KEY` | Global API key (use with `EMAIL`) |
-| `CLOUDFLARE_EMAIL` | Cloudflare email |
+## How It Works
 
-## Architecture
+```
+Lean source (.lean)
+  │
+  │  Pantograph REPL
+  ▼
+S-expression AST
+  │
+  │  Parser (src/s-expression/)
+  ▼
+Lean expression tree
+  │
+  │  Extractor (src/extractor/)
+  │  ├── structures  → fields, types
+  │  ├── inductives  → constructors, params
+  │  ├── theorems    → hypotheses, conclusion
+  │  └── defs        → signature, arity
+  ▼
+Intermediate representation
+  │
+  │  Generators (src/generator/)
+  ▼
+TypeScript files
+  ├── types.ts           Interfaces & unions
+  ├── arbitraries.ts     fast-check generators
+  ├── stubs.ts           Function signatures
+  └── properties.test.ts Property-based tests
+```
+
+### Source Layout
 
 ```
 src/
-├── index.ts               Entry point
-├── cli.ts                 CLI argument parsing
-├── lean-ts-map.ts         Lean → TypeScript type mapping
-│
-├── s-expression/          S-expression parser
-│   ├── parser.ts            Tokenizer + parser
-│   └── lean-expr.ts         SexpNode → LeanExpr AST
-│
-├── extractor/             Lean declaration extraction
-│   ├── classifier.ts        Declaration kind detection
-│   ├── structure-parser.ts  Structure → IR
-│   ├── inductive-parser.ts  Inductive → IR
-│   ├── theorem-parser.ts    Theorem → IR
-│   ├── def-parser.ts        Function definition → IR
-│   └── type-resolver.ts     Lean type → IRType
-│
-├── generator/             TypeScript code generation
-│   ├── type-generator.ts    types.ts
-│   ├── arbitrary-generator.ts  arbitraries.ts
-│   ├── property-generator.ts   properties.test.ts
-│   └── stub-generator.ts    stubs.ts
-│
-├── pantograph/            Pantograph REPL client
-│   ├── client.ts            JSON RPC over stdin/stdout
-│   └── protocol.ts          Protocol type definitions
-│
-└── prover/                Automatic sorry prover
-    ├── sorry-finder.ts      Locate sorry positions
-    ├── proof-loop.ts        Propose → verify loop
-    └── tactic-llm.ts        LLM integration
+├── index.ts                  Entry point (CLI)
+├── cli.ts                    Argument parsing
+├── lean-ts-map.ts            Lean → TS type mapping
+├── s-expression/             S-expression parser
+│   ├── parser.ts               Tokenizer + recursive descent
+│   └── lean-expr.ts            SexpNode → LeanExpr AST
+├── extractor/                Declaration extraction
+│   ├── classifier.ts           Kind detection (struct/inductive/thm/def)
+│   ├── structure-parser.ts     Structure → IR
+│   ├── inductive-parser.ts     Inductive → IR
+│   ├── theorem-parser.ts       Theorem → IR
+│   ├── def-parser.ts           Function definition → IR
+│   └── type-resolver.ts        Lean type → IRType
+├── generator/                Code generation
+│   ├── type-generator.ts       types.ts output
+│   ├── arbitrary-generator.ts  arbitraries.ts output
+│   ├── property-generator.ts   properties.test.ts output
+│   └── stub-generator.ts       stubs.ts output
+├── pantograph/               Pantograph REPL client
+│   ├── client.ts               JSON-RPC over stdin/stdout
+│   └── protocol.ts             Protocol type definitions
+└── prover/                   Auto-proof engine
+    ├── sorry-finder.ts         Locate sorry positions in source
+    ├── proof-loop.ts           Propose → verify loop
+    └── tactic-llm.ts           LLM tactic generation
 ```
+
+---
 
 ## Development
 
 ```bash
-npm test              # Run tests
+git clone <repo-url>
+cd lean2ts
+npm install
+npm run build
+
+npm test              # Run test suite (vitest)
 npm run test:watch    # Watch mode
-npm run lint          # Type check
-npm run examples      # Generate examples (requires Pantograph)
+npm run lint          # Type-check only
+npm run examples      # Regenerate example outputs (requires Pantograph)
 ```
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE)

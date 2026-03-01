@@ -49,10 +49,9 @@ function createMockPantographClient(opts: {
 }
 
 const dummyLLMConfig: LLMConfig = {
-  provider: "workers-ai",
-  accountId: "test-account",
-  apiToken: "test-token",
-  model: "@cf/test-model",
+  baseURL: "https://api.example.com/v1",
+  apiKey: "test-key",
+  model: "test-model",
 };
 
 describe("proveSorries", () => {

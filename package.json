@@ -14,6 +14,8 @@
     "examples": "npx tsx examples/generate-examples.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^0.2.0",
+    "ai": "^4.3.0",
     "fast-check": "^3.22.0"
   },
   "devDependencies": {

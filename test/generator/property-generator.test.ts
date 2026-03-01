@@ -86,6 +86,80 @@ describe("generateProperties", () => {
     expect(result).toContain(".every(");
   });
 
+  it("renders inductive constructor refs as discriminated union literals", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "inductive",
+        name: "Weather",
+        typeParams: [],
+        variants: [
+          { name: "sunny", tag: "sunny", fields: [] },
+          { name: "cloudy", tag: "cloudy", fields: [] },
+          { name: "rainy", tag: "rainy", fields: [{ name: "amount", type: { kind: "primitive", name: "number" } }] },
+        ],
+      },
+      {
+        kind: "def",
+        name: "weatherSeverity",
+        typeParams: [],
+        params: [{ name: "w", type: { kind: "ref", name: "Weather" } }],
+        returnType: { kind: "primitive", name: "number" },
+      },
+      {
+        kind: "theorem",
+        name: "sunny_is_zero",
+        universals: [],
+        prop: {
+          kind: "eq",
+          left: {
+            kind: "call",
+            func: "weatherSeverity",
+            args: [{ kind: "field", object: { kind: "var", name: "Weather" }, field: "sunny" }],
+          },
+          right: { kind: "literal", value: 0 },
+        },
+      },
+    ];
+
+    const result = generateProperties(decls);
+    // Weather.sunny → { tag: "sunny" } に変換されている
+    expect(result).toContain('{ tag: "sunny" }');
+    // .tag === "sunny" ではなく、左辺は関数呼び出しなので === 0
+    expect(result).toContain("weatherSeverity");
+    expect(result).not.toContain("Weather.sunny");
+  });
+
+  it("renders zero-field ctor eq as .tag comparison", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "inductive",
+        name: "Color",
+        typeParams: [],
+        variants: [
+          { name: "red", tag: "red", fields: [] },
+          { name: "blue", tag: "blue", fields: [] },
+        ],
+      },
+      {
+        kind: "theorem",
+        name: "color_eq",
+        universals: [
+          { name: "c", type: { kind: "ref", name: "Color" } },
+        ],
+        prop: {
+          kind: "eq",
+          left: { kind: "var", name: "c" },
+          right: { kind: "field", object: { kind: "var", name: "Color" }, field: "red" },
+        },
+      },
+    ];
+
+    const result = generateProperties(decls);
+    // c === Color.red → c.tag === "red"
+    expect(result).toContain('.tag === "red"');
+    expect(result).not.toContain("Color.red");
+  });
+
   it("generates raw as TODO comment", () => {
     const decls: LeanDecl[] = [
       {

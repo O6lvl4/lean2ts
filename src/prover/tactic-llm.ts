@@ -1,3 +1,5 @@
+import { generateText } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { SorryLocation } from "./sorry-finder.js";
 
 export interface TacticProposal {
@@ -5,18 +7,38 @@ export interface TacticProposal {
   confidence?: number;
 }
 
-export type LLMConfig = {
-  provider: "workers-ai";
-  accountId: string;
+export interface LLMConfig {
+  /** OpenAI 互換エンドポイントの base URL */
+  baseURL: string;
+  /** API キー */
+  apiKey: string;
+  /** モデル名 */
   model: string;
-} & (
-  | { apiToken: string; apiKey?: undefined; email?: undefined }
-  | { apiKey: string; email: string; apiToken?: undefined }
-);
+}
+
+/** よく使うプロバイダーのプリセット */
+export const LLM_PRESETS = {
+  cloudflare: (accountId: string) => ({
+    baseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
+    model: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+  }),
+  openai: () => ({
+    baseURL: "https://api.openai.com/v1",
+    model: "gpt-4o",
+  }),
+  groq: () => ({
+    baseURL: "https://api.groq.com/openai/v1",
+    model: "llama-3.3-70b-versatile",
+  }),
+  ollama: () => ({
+    baseURL: "http://localhost:11434/v1",
+    model: "deepseek-r1:32b",
+  }),
+} as const;
 
 /**
  * LLM にタクティクを提案させる。
- * Workers AI の REST API を直接叩く。
+ * Vercel AI SDK 経由で任意の OpenAI 互換プロバイダーを使用する。
  */
 export async function proposeTactics(
   goal: SorryLocation,
@@ -26,8 +48,22 @@ export async function proposeTactics(
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(goal, numProposals);
 
-  const response = await callWorkersAI(config, systemPrompt, userPrompt);
-  return parseTacticResponse(response);
+  const provider = createOpenAICompatible({
+    name: "lean2ts-llm",
+    baseURL: config.baseURL,
+    apiKey: config.apiKey,
+  });
+
+  const { text } = await generateText({
+    model: provider(config.model),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    maxTokens: 2048,
+  });
+
+  return parseTacticResponse(text);
 }
 
 function buildSystemPrompt(): string {
@@ -51,54 +87,6 @@ function buildUserPrompt(goal: SorryLocation, numProposals: number): string {
   prompt += `\`\`\`lean\n${goal.statement}\n\`\`\`\n\n`;
   prompt += `Suggest ${numProposals} different tactics, one per line. Output ONLY the tactics, nothing else.`;
   return prompt;
-}
-
-async function callWorkersAI(
-  config: LLMConfig,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/ai/run/${config.model}`;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (config.apiToken) {
-    headers["Authorization"] = `Bearer ${config.apiToken}`;
-  } else if (config.apiKey && config.email) {
-    headers["X-Auth-Key"] = config.apiKey;
-    headers["X-Auth-Email"] = config.email;
-  }
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 2048,
-    }),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Workers AI API error (${resp.status}): ${text}`);
-  }
-
-  const json = (await resp.json()) as {
-    result?: { response?: string };
-    errors?: Array<{ message: string }>;
-  };
-
-  if (json.errors?.length) {
-    throw new Error(
-      `Workers AI errors: ${json.errors.map((e) => e.message).join(", ")}`,
-    );
-  }
-
-  return json.result?.response ?? "";
 }
 
 /**

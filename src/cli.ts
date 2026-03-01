@@ -7,7 +7,7 @@ import { PantographClient } from "./pantograph/client.js";
 import { extractDeclarations } from "./extractor/index.js";
 import { generate, type GeneratedFiles } from "./generator/index.js";
 import { prove } from "./prover/index.js";
-import type { LLMConfig } from "./prover/tactic-llm.js";
+import { type LLMConfig, LLM_PRESETS } from "./prover/tactic-llm.js";
 
 export async function run(argv: string[]): Promise<void> {
   // サブコマンド判定
@@ -117,6 +117,8 @@ async function runProve(argv: string[]): Promise<void> {
     args: argv,
     options: {
       model: { type: "string" },
+      "base-url": { type: "string" },
+      "api-key": { type: "string" },
       pantograph: { type: "string" },
       "lean-path": { type: "string" },
       modules: { type: "string", multiple: true },
@@ -132,27 +134,7 @@ async function runProve(argv: string[]): Promise<void> {
     process.exit(values.help ? 0 : 1);
   }
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-  const apiKey = process.env.CLOUDFLARE_API_KEY;
-  const email = process.env.CLOUDFLARE_EMAIL;
-
-  if (!accountId || (!apiToken && !(apiKey && email))) {
-    console.error(
-      "Error: CLOUDFLARE_ACCOUNT_ID と認証情報（CLOUDFLARE_API_TOKEN または CLOUDFLARE_API_KEY + CLOUDFLARE_EMAIL）が必要です",
-    );
-    process.exit(1);
-  }
-
-  const llmConfig: LLMConfig = {
-    provider: "workers-ai",
-    accountId,
-    ...(apiToken
-      ? { apiToken }
-      : { apiKey: apiKey!, email: email! }),
-    model:
-      values.model ?? "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-  };
+  const llmConfig = resolveLLMConfig(values);
 
   await prove({
     input: positionals[0],
@@ -167,6 +149,75 @@ async function runProve(argv: string[]): Promise<void> {
         : undefined,
     },
   });
+}
+
+/**
+ * CLI オプションと環境変数から LLM 設定を解決する。
+ *
+ * 優先順位:
+ * 1. --base-url + --api-key (明示指定)
+ * 2. LLM_BASE_URL + LLM_API_KEY (汎用環境変数)
+ * 3. OPENAI_API_KEY (OpenAI)
+ * 4. CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN (後方互換)
+ */
+function resolveLLMConfig(values: {
+  model?: string;
+  "base-url"?: string;
+  "api-key"?: string;
+}): LLMConfig {
+  // 1. CLI 明示指定
+  if (values["base-url"] && values["api-key"]) {
+    return {
+      baseURL: values["base-url"],
+      apiKey: values["api-key"],
+      model: values.model ?? "gpt-4o",
+    };
+  }
+
+  // 2. 汎用環境変数
+  const llmBaseURL = process.env.LLM_BASE_URL;
+  const llmApiKey = process.env.LLM_API_KEY;
+  if (llmBaseURL && llmApiKey) {
+    return {
+      baseURL: llmBaseURL,
+      apiKey: llmApiKey,
+      model: values.model ?? process.env.LLM_MODEL ?? "gpt-4o",
+    };
+  }
+
+  // 3. OpenAI
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    const preset = LLM_PRESETS.openai();
+    return {
+      baseURL: preset.baseURL,
+      apiKey: openaiKey,
+      model: values.model ?? preset.model,
+    };
+  }
+
+  // 4. Cloudflare Workers AI (後方互換)
+  const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const cfApiToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (cfAccountId && cfApiToken) {
+    const preset = LLM_PRESETS.cloudflare(cfAccountId);
+    return {
+      baseURL: preset.baseURL,
+      apiKey: cfApiToken,
+      model: values.model ?? preset.model,
+    };
+  }
+
+  console.error(
+    `Error: LLM provider not configured.
+
+Set one of:
+  OPENAI_API_KEY                                    — OpenAI
+  CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN      — Cloudflare Workers AI
+  LLM_BASE_URL + LLM_API_KEY                       — Any OpenAI-compatible provider
+  --base-url <url> --api-key <key>                  — CLI explicit`,
+  );
+  process.exit(1);
 }
 
 function printUsage(): void {
@@ -191,14 +242,21 @@ function printProveUsage(): void {
   console.log(`Usage: lean2ts prove <input.lean> [options]
 
 Options:
-  --model <name>         LLM モデル (default: @cf/deepseek-ai/deepseek-r1-distill-qwen-32b)
-  --pantograph <path>    pantograph-repl のパス
-  --modules <names...>   Lean モジュール
-  --max-attempts <n>     最大リトライ回数 (default: 3)
-  --verbose              ログ出力
-  -h, --help             ヘルプ表示
+  --model <name>         LLM model name
+  --base-url <url>       OpenAI-compatible API base URL
+  --api-key <key>        API key for the LLM provider
+  --pantograph <path>    Path to pantograph-repl binary
+  --modules <names...>   Lean modules to load
+  --max-attempts <n>     Max tactic attempts per sorry (default: 3)
+  --verbose              Verbose logging
+  -h, --help             Show help
 
-Environment:
-  CLOUDFLARE_ACCOUNT_ID  Cloudflare アカウント ID
-  CLOUDFLARE_API_TOKEN   Cloudflare API トークン`);
+Environment (auto-detected in order):
+  OPENAI_API_KEY                                 OpenAI
+  CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN   Cloudflare Workers AI
+  LLM_BASE_URL + LLM_API_KEY [+ LLM_MODEL]      Any OpenAI-compatible provider
+
+Examples:
+  OPENAI_API_KEY=sk-... npx lean2ts prove input.lean
+  LLM_BASE_URL=http://localhost:11434/v1 npx lean2ts prove input.lean --model deepseek-r1:32b`);
 }
