@@ -10,7 +10,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "examples": "npx tsx examples/generate-examples.ts"
   },
   "dependencies": {
     "fast-check": "^3.22.0"
