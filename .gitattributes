@@ -1,1 +1,2 @@
 *.lean linguist-language=lean4
+examples/**/*.lean linguist-documentation=false
