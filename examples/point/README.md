@@ -1,24 +1,24 @@
-# Point — 基本的な型変換
+# Point — Your First lean2ts Example
 
-lean2ts の最小限の動作を示す例。構造体、関数定義、定理それぞれの変換を確認できる。
+The simplest possible example. One structure, one function, one theorem. If you're new to lean2ts, start here.
 
-## Lean → TypeScript
+## What Gets Generated
 
-| Lean | 生成 | 説明 |
+| Lean | Generated | What it does |
 |---|---|---|
-| `structure Point` | `export interface Point { readonly x: number; readonly y: number }` | フィールドは `readonly` |
-| `def double` | `export function double(n: number): number { ... }` | 関数スタブ（TODO 付き） |
-| `theorem add_zero` | `fc.property(fc.nat(), (n) => (n + 0) === n)` | 算術の恒等式テスト |
+| `structure Point` | `export interface Point { readonly x: number; readonly y: number }` | Fields become `readonly` properties |
+| `def double` | `export function double(n: number): number { ... }` | Function stub with TODO |
+| `theorem add_zero` | `fc.property(fc.nat(), (n) => (n + 0) === n)` | Arithmetic identity as a property test |
 
-## 型マッピング
+## Type Mapping
 
 ```
-Lean Nat  →  TypeScript number  →  fc.nat()
+Lean Nat  =>  TypeScript number  =>  fc.nat()
 ```
 
-`Nat` は TypeScript の `number` に、fast-check では `fc.nat()`（非負整数）にマッピングされる。
+Lean's `Nat` maps to TypeScript `number`. In fast-check, it generates `fc.nat()` which produces non-negative integers — preserving the Lean semantics.
 
-## テスト実行
+## Run the Tests
 
 ```bash
 npx vitest run examples/point/generated/properties.test.ts

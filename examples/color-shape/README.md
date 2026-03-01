@@ -1,10 +1,8 @@
-# Color & Shape — 帰納型と判別共用体
+# Color & Shape — Inductive Types as Discriminated Unions
 
-Lean の帰納型 (`inductive`) が TypeScript の判別共用体 (discriminated union) に変換される例。
+Lean's `inductive` types are one of its most powerful features. lean2ts converts them into TypeScript discriminated unions — the idiomatic way to model "one of several possible shapes" in TypeScript.
 
-## Lean → TypeScript
-
-### enum 相当（フィールドなし）
+## Enum-like Types (No Fields)
 
 ```lean
 inductive Color where
@@ -17,13 +15,15 @@ export type Color =
   | { readonly tag: "green" }
   | { readonly tag: "blue" };
 
-// 型ガード関数も自動生成
+// Type guard functions are auto-generated
 export function isRed(x: Color): x is Extract<Color, { tag: "red" }> {
   return x.tag === "red";
 }
 ```
 
-### フィールド付きバリアント
+Each constructor becomes a tagged variant. Type guards give you narrowing for free.
+
+## Variants with Fields
 
 ```lean
 inductive Shape where
@@ -39,19 +39,15 @@ export type Shape =
   | { readonly tag: "point" };
 ```
 
-バリアントごとにフィールドの有無が異なる型を正確に生成する。
+Each variant gets exactly the fields it needs. No optional properties, no null checks — the type system enforces correctness.
 
-## fast-check Arbitrary
+## Arbitrary Generation
+
+fast-check arbitraries are generated to match the union structure:
 
 ```typescript
-// フィールドなし → fc.constant
-export const arbColor = fc.oneof(
-  fc.constant({ tag: "red" as const }),
-  fc.constant({ tag: "green" as const }),
-  fc.constant({ tag: "blue" as const })
-);
-
-// フィールドあり → fc.record、なし → fc.constant を混在
+// No fields => fc.constant
+// With fields => fc.record
 export const arbShape = fc.oneof(
   fc.record({ tag: fc.constant("circle" as const), radius: fc.nat() }),
   fc.record({ tag: fc.constant("rect" as const), width: fc.nat(), height: fc.nat() }),
@@ -59,4 +55,4 @@ export const arbShape = fc.oneof(
 );
 ```
 
-`fc.oneof` でバリアントをランダムに選択し、各バリアントのフィールドも自動生成する。
+`fc.oneof` randomly selects a variant, and each variant's fields are randomly generated. Your property tests exercise all branches automatically.

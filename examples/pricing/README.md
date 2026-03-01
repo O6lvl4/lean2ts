@@ -1,43 +1,47 @@
-# Pricing — 割引・税計算のビジネスルール
+# Pricing — When Lean Catches Bugs Your Tests Miss
 
-料金計算における不変条件を Lean で証明し、TypeScript のプロパティテストとして自動生成する例。
+This is lean2ts's flagship example. It demonstrates something subtle and important: **Lean's natural number arithmetic silently protects you from a class of bugs that JavaScript's numbers do not.**
 
-## Lean 仕様 → 生成コード
+In Lean, `Nat` subtraction floors at zero — `3 - 5 = 0`. In JavaScript, `3 - 5 = -2`. This difference is invisible in most test cases, but it causes real bugs in production.
 
-| Lean | 生成ファイル | 内容 |
+## What Gets Generated
+
+| Lean | Generated File | Content |
 |---|---|---|
-| `inductive Discount` | `types.ts` | `Discount` 判別共用体 + 型ガード (`isNone`, `isPercent`, `isFixed`) |
+| `inductive Discount` | `types.ts` | `Discount` discriminated union + type guards |
 | `structure LineItem` | `types.ts` | `LineItem` interface |
-| `def lineTotal`, `applyDiscount`, `addTax` | `stubs.ts` | 関数スタブ → 自分で実装する |
-| `theorem discount_bounded` 他4件 | `properties.test.ts` | fast-check プロパティテスト |
+| `def lineTotal`, `applyDiscount`, `addTax` | `stubs.ts` | Function stubs for you to implement |
+| 4 theorems | `properties.test.ts` | fast-check property tests |
 
-## 定理とテストの対応
+## Theorems and Their Tests
 
-| Lean 定理 | 生成されるテスト | 何を検証するか |
+| Lean Theorem | Generated Test | What It Verifies |
 |---|---|---|
-| `discount_bounded` | `applyDiscount(amount, d) <= amount` | 割引後は元の金額以下 |
-| `discount_nonneg` | `0 <= applyDiscount(amount, d)` | 割引後は非負（Lean では自明、TS では自明ではない） |
-| `tax_increases` | `amount <= addTax(amount, rate)` | 税込は税抜以上 |
-| `double_discount_le` | `applyDiscount(applyDiscount(amount, d), d) <= applyDiscount(amount, d)` | 二重割引は単一割引以下 |
+| `discount_bounded` | `applyDiscount(amount, d) <= amount` | Discounted price never exceeds original |
+| `discount_nonneg` | `0 <= applyDiscount(amount, d)` | Discounted price is never negative |
+| `tax_increases` | `amount <= addTax(amount, rate)` | Tax-inclusive is always >= tax-exclusive |
+| `double_discount_le` | `applyDiscount(applyDiscount(a, d), d) <= applyDiscount(a, d)` | Applying discount twice gives <= single discount |
 
-## バグ検出のデモ
+## The Bug That Lean Finds
 
-`stubs.ts` に素朴な実装を書くと:
+Write the naive implementation:
 
 ```typescript
-case "fixed": return amount - d.amount;  // JS では負になりうる
+case "fixed": return amount - d.amount;  // Looks fine, right?
 ```
 
-`discountNonneg` テストが失敗する:
+`discountNonneg` fails immediately:
 
 ```
 Counterexample: [1, {"tag":"percent","rate":200}]
-applyDiscount(1, { tag: "percent", rate: 200 }) → -1  (≥ 0 ではない)
+applyDiscount(1, { tag: "percent", rate: 200 }) => -1  (not >= 0)
 ```
 
-正しい実装は `Math.max(0, ...)` で Lean の Nat（自然に 0 でクリップ）と同じ挙動にする。
+A 200% discount on $1 gives -$1. Your customer just got paid to buy your product.
 
-## テスト実行
+The fix is `Math.max(0, ...)` — mirroring what Lean's `Nat` does automatically.
+
+## Run the Tests
 
 ```bash
 npx vitest run examples/pricing/generated/properties.test.ts

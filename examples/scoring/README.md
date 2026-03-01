@@ -1,39 +1,41 @@
-# Scoring — 試験スコアの集計
+# Scoring — Proving Your Aggregation Logic Is Correct
 
-試験スコアの合成操作に対する性質を Lean で証明し、プロパティテストとして自動生成する例。
+Score aggregation seems simple: add up the points. But "simple" operations have hidden assumptions. Is combining scores commutative? Does adding a bonus ever decrease the score? Does it accidentally change the maximum possible score?
 
-## Lean 仕様 → 生成コード
+These are exactly the kind of subtle invariants that slip through unit tests but are trivially expressed (and proven) in Lean.
 
-| Lean | 生成ファイル | 内容 |
+## What Gets Generated
+
+| Lean | Generated File | Content |
 |---|---|---|
-| `inductive Grade` | `types.ts` | `Grade` 判別共用体 (a/b/c/d/f) + 型ガード |
+| `inductive Grade` | `types.ts` | `Grade` discriminated union (a/b/c/d/f) + type guards |
 | `structure Score` | `types.ts` | `Score` interface (`earned`, `possible`) |
-| `def combine`, `addBonus` | `stubs.ts` | 関数スタブ |
-| `theorem combine_earned_comm` 他4件 | `properties.test.ts` | fast-check プロパティテスト |
+| `def combine`, `addBonus` | `stubs.ts` | Function stubs |
+| 5 theorems | `properties.test.ts` | fast-check property tests |
 
-## 定理とテストの対応
+## Theorems and Their Tests
 
-| Lean 定理 | 生成されるテスト | 何を検証するか |
+| Lean Theorem | Generated Test | What It Verifies |
 |---|---|---|
-| `combine_earned_comm` | `combine(a, b).earned === combine(b, a).earned` | 合成の可換性（得点） |
-| `combine_possible_comm` | `combine(a, b).possible === combine(b, a).possible` | 合成の可換性（満点） |
-| `combine_possible_ge` | `a.possible <= combine(a, b).possible` | 合成すると満点は増える |
-| `bonus_increases` | `s.earned <= addBonus(s, bonus).earned` | ボーナスで得点は減らない |
-| `bonus_preserves_possible` | `addBonus(s, bonus).possible === s.possible` | ボーナスは満点を変えない |
+| `combine_earned_comm` | `combine(a, b).earned === combine(b, a).earned` | Combining scores is commutative (earned) |
+| `combine_possible_comm` | `combine(a, b).possible === combine(b, a).possible` | Combining scores is commutative (possible) |
+| `combine_possible_ge` | `a.possible <= combine(a, b).possible` | Combined possible score never shrinks |
+| `bonus_increases` | `s.earned <= addBonus(s, bonus).earned` | Bonus never decreases earned score |
+| `bonus_preserves_possible` | `addBonus(s, bonus).possible === s.possible` | Bonus doesn't affect possible score |
 
-## ポイント
+## The Bug That Lean Finds
 
-`combine` の実装で `possible` の加算を忘れると:
+Forget to add the `possible` fields when combining:
 
 ```typescript
 function combine(a: Score, b: Score): Score {
-  return { earned: a.earned + b.earned, possible: a.possible }; // possible の合算漏れ
+  return { earned: a.earned + b.earned, possible: a.possible }; // Oops
 }
 ```
 
-`combinePossibleComm` テストが失敗する — `a.possible ≠ b.possible` のケースで可換性が崩れるため。
+`combinePossibleComm` fails — because `a.possible !== b.possible` in general, and the function silently drops `b.possible`. The commutativity property catches what a unit test with equal scores would miss.
 
-## テスト実行
+## Run the Tests
 
 ```bash
 npx vitest run examples/scoring/generated/properties.test.ts

@@ -1,10 +1,8 @@
-# Generics — 型パラメータとジェネリクス
+# Generics — Type Parameters That Just Work
 
-Lean の型パラメータ付き定義が TypeScript のジェネリクスに変換される例。
+Lean's type parameters map directly to TypeScript generics. Both explicit `(α : Type)` and implicit `{α : Type}` parameters become `<α>` in the generated code.
 
-## Lean → TypeScript
-
-### 型パラメータ付き構造体
+## Generic Structures
 
 ```lean
 structure Wrapper (α : Type) where
@@ -19,7 +17,7 @@ export interface Wrapper<α> {
 }
 ```
 
-### implicit 型パラメータ付き関数
+## Generic Functions
 
 ```lean
 def swap {α β : Type} (p : α × β) : β × α := (p.2, p.1)
@@ -29,38 +27,38 @@ def swap {α β : Type} (p : α × β) : β × α := (p.2, p.1)
 export function swap<α, β>(p: readonly [α, β]): readonly [β, α] { ... }
 ```
 
-`{α : Type}` の implicit パラメータは TypeScript の型パラメータ `<α>` に変換される。`α × β`（Prod）は `readonly [α, β]`（タプル）になる。
+Implicit parameters `{α : Type}` become type parameters `<α>` — they're inferred at the call site in both languages. `α × β` (Prod) becomes `readonly [α, β]` (tuple).
 
-## Arbitrary のファクトリ関数
+## Arbitrary Factory Functions
 
-ジェネリック型の Arbitrary は定数ではなくファクトリ関数として生成される:
+This is where it gets interesting. A non-generic type gets a simple constant arbitrary. But a generic type needs to know *how to generate its type parameters*. lean2ts handles this by generating factory functions:
 
 ```typescript
-// 非ジェネリック → const
+// Non-generic => constant
 export const arbPoint: fc.Arbitrary<Point> = fc.record({ ... });
 
-// ジェネリック → function（型パラメータの Arbitrary を引数で受け取る）
-export function arbWrapper<α>(arbΑ: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α>> {
+// Generic => factory function that takes an arbitrary for each type parameter
+export function arbWrapper<α>(arbα: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α>> {
   return fc.record({
-    value: arbΑ,
+    value: arbα,
     label: fc.string(),
   });
 }
 ```
 
-使用時は具体的な Arbitrary を渡す:
+Usage is natural:
 
 ```typescript
 const arbStringWrapper = arbWrapper(fc.string());
 const arbNumberWrapper = arbWrapper(fc.nat());
 ```
 
-## 対応する Lean の機能
+## Lean → TypeScript Mapping
 
 | Lean | TypeScript |
 |---|---|
-| `(α : Type)` explicit 型パラメータ | `<α>` ジェネリクス |
-| `{α : Type}` implicit 型パラメータ | `<α>` ジェネリクス |
-| `[ToString α]` 型クラス制約 | パラメータからは除外 |
+| `(α : Type)` explicit type parameter | `<α>` generic |
+| `{α : Type}` implicit type parameter | `<α>` generic |
+| `[ToString α]` typeclass constraint | Excluded from parameters |
 | `α × β` (Prod) | `readonly [α, β]` |
 | `List α` | `ReadonlyArray<α>` |
