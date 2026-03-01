@@ -57,8 +57,31 @@ This reads a Lean file, talks to [Pantograph](https://github.com/lenianiva/Panto
 ### Prerequisites
 
 - **Node.js 22+**
-- **[Lean 4](https://lean-lang.org/lean4/doc/setup.html)**
+- **[Lean 4](https://lean-lang.org/lean4/doc/setup.html)** — install via [elan](https://github.com/leanprover/elan)
 - **[Pantograph](https://github.com/lenianiva/Pantograph)** — Lean's programmatic interface
+
+#### Installing Pantograph
+
+```bash
+git clone https://github.com/lenianiva/Pantograph.git
+cd Pantograph
+lake build
+```
+
+Then either add the built binary to your PATH:
+
+```bash
+export PATH="$PWD/.lake/build/bin:$PATH"
+```
+
+Or pass the path directly:
+
+```bash
+npx lean2ts pricing.lean --pantograph ./Pantograph/.lake/build/bin/pantograph-repl
+```
+
+> **Note:** Pantograph must be built with the same Lean version as your project.
+> Check with `lean --version` and ensure the `lean-toolchain` file in the Pantograph repo matches.
 
 ---
 
