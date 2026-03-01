@@ -213,7 +213,6 @@ export function arbWrapper<α>(arbα: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α
 | [`weather/`](examples/weather/) | Alert levels, precipitation, buggy vs correct impl | 8 |
 | [`scoring/`](examples/scoring/) | Commutativity and monotonicity | 5 |
 | [`inventory/`](examples/inventory/) | Conservation laws in stock management | 6 |
-| [`inquiry-state/`](examples/inquiry-state/) | 11-state machine with transition proofs | 8 |
 
 Each example contains a `.lean` source and a `generated/` directory with the TypeScript output.
 

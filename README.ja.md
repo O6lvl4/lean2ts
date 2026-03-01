@@ -213,7 +213,6 @@ export function arbWrapper<α>(arbα: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α
 | [`weather/`](examples/weather/) | 警報レベル、降水判定、バグ入り実装との比較 | 8 |
 | [`scoring/`](examples/scoring/) | スコア集計の可換性と単調性 | 5 |
 | [`inventory/`](examples/inventory/) | 在庫管理の保存則 | 6 |
-| [`inquiry-state/`](examples/inquiry-state/) | 11状態のステートマシンと遷移証明 | 8 |
 
 各サンプルは `.lean` ソースと `generated/` ディレクトリ（TypeScript 出力）を含む。
 
