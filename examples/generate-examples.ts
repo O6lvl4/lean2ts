@@ -40,6 +40,7 @@ const examples: Example[] = [
       "Shape.circle",
       "Shape.rect",
       "Shape.point",
+      "add",
     ],
   },
   {
@@ -51,6 +52,7 @@ const examples: Example[] = [
       "swap",
       "listHead",
       "stringify",
+      "and_comm_prop",
     ],
   },
 ];
@@ -73,13 +75,16 @@ async function main() {
 
     await mkdir(example.dir, { recursive: true });
 
+    const written: string[] = [];
     for (const [filename, content] of Object.entries(files)) {
+      if (!content) continue;
       const filePath = resolve(example.dir, filename);
       await writeFile(filePath, content, "utf-8");
+      written.push(filename);
     }
 
     console.log(
-      `[${example.name}] generated ${Object.keys(files).length} files → ${example.dir}`
+      `[${example.name}] generated ${written.length} files (${written.join(", ")}) → ${example.dir}`
     );
   }
 }

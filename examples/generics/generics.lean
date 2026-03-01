@@ -16,3 +16,7 @@ def listHead {α : Type} (xs : List α) (default : α) : α :=
 
 -- 型クラス制約
 def stringify [ToString α] (x : α) : String := toString x
+
+-- 論理積の可換性 → property test
+theorem and_comm_prop (a b : Prop) : a ∧ b → b ∧ a := by
+  intro ⟨ha, hb⟩; exact ⟨hb, ha⟩
