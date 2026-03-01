@@ -52,7 +52,11 @@ export class PantographClient {
       env,
     });
 
-    this.rl = createInterface({ input: this.proc.stdout! });
+    const stdout = this.proc.stdout;
+    if (!stdout) {
+      throw new Error("Failed to create Pantograph process stdout");
+    }
+    this.rl = createInterface({ input: stdout });
     this.rl.on("line", (line) => {
       if (this.options.verbose) {
         process.stderr.write(`[pantograph] < ${line}\n`);
@@ -127,10 +131,11 @@ export class PantographClient {
       process.stderr.write(`[pantograph] > ${line}\n`);
     }
 
+    const proc = this.proc;
     return new Promise<PantographResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`Pantograph request timed out: ${command.cmd}`));
-      }, this.options.timeout!);
+      }, this.options.timeout ?? 30_000);
 
       this.pending.push({
         resolve: (resp) => {
@@ -143,13 +148,13 @@ export class PantographClient {
         },
       });
 
-      this.proc!.stdin!.write(line + "\n");
+      proc.stdin?.write(line + "\n");
     });
   }
 
   /** .lean ファイルを処理し、新しい定数名の一覧を返す */
   async processFile(filePath: string): Promise<string[]> {
-    const resp = (await this.send({
+    const rawResp = await this.send({
       cmd: "frontend.process",
       payload: {
         fileName: filePath,
@@ -157,11 +162,13 @@ export class PantographClient {
         inheritEnv: true,
         newConstants: true,
       },
-    })) as FrontendProcessResponse;
+    });
 
-    if (isPantographError(resp)) {
-      throw new Error(`Pantograph error: ${(resp as any).desc}`);
+    if (isPantographError(rawResp)) {
+      throw new Error(`Pantograph error: ${rawResp.desc}`);
     }
+
+    const resp = rawResp as FrontendProcessResponse;
 
     // units 配列の各ユニットから newConstants を集約
     const constants: string[] = [];
@@ -173,21 +180,62 @@ export class PantographClient {
     return constants;
   }
 
+  /** .lean ファイルを処理し、エラーメッセージを含む診断情報を返す */
+  async processFileWithDiagnostics(filePath: string): Promise<{
+    constants: string[];
+    errors: string[];
+    warnings: string[];
+  }> {
+    const rawResp = await this.send({
+      cmd: "frontend.process",
+      payload: {
+        fileName: filePath,
+        readHeader: true,
+        inheritEnv: true,
+        newConstants: true,
+      },
+    });
+
+    if (isPantographError(rawResp)) {
+      throw new Error(`Pantograph error: ${rawResp.desc}`);
+    }
+
+    const resp = rawResp as FrontendProcessResponse;
+    const constants: string[] = [];
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    for (const unit of resp.units ?? []) {
+      if (unit.newConstants) {
+        constants.push(...unit.newConstants);
+      }
+      for (const msg of unit.messages ?? []) {
+        if (msg.severity === "error") {
+          errors.push(msg.data);
+        } else if (msg.severity === "warning") {
+          warnings.push(msg.data);
+        }
+      }
+    }
+
+    return { constants, errors, warnings };
+  }
+
   /** 定数を inspect し、型情報等を返す */
   async inspect(name: string): Promise<EnvInspectResponse> {
-    const resp = (await this.send({
+    const rawResp = await this.send({
       cmd: "env.inspect",
       payload: {
         name,
         value: true,
       },
-    })) as EnvInspectResponse;
+    });
 
-    if (isPantographError(resp)) {
-      throw new Error(`Pantograph error inspecting "${name}": ${(resp as any).desc}`);
+    if (isPantographError(rawResp)) {
+      throw new Error(`Pantograph error inspecting "${name}": ${rawResp.desc}`);
     }
 
-    return resp;
+    return rawResp as EnvInspectResponse;
   }
 
   async stop(): Promise<void> {
