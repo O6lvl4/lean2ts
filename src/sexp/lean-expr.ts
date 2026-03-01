@@ -73,83 +73,56 @@ export function sexpToLeanExpr(node: SexpNode): LeanExpr {
   return { tag: "app", fn, args };
 }
 
+type KeywordHandler = (rest: SexpNode[]) => LeanExpr;
+
+const KEYWORD_HANDLERS: Record<string, KeywordHandler> = {
+  c: (rest) => ({ tag: "const", name: extractName(rest[0]) }),
+  sort: (rest) => ({ tag: "sort", level: rest[0] ? parseLevel(rest[0]) : { tag: "zero" } }),
+  lit: parseLitForm,
+  forall: (rest) => parseBinderForm("forallE", rest),
+  lambda: (rest) => parseBinderForm("lambda", rest),
+  let: parseLetForm,
+  fv: (rest) => ({ tag: "fvar", name: extractName(rest[0]) }),
+  mv: (rest) => ({ tag: "mvar", name: extractName(rest[0]) }),
+  mvd: (rest) => ({ tag: "mvar", name: extractName(rest[0]) }),
+  proj: parseProjForm,
+  subst: parseSubstForm,
+};
+
 function parseKeywordForm(keyword: string, rest: SexpNode[]): LeanExpr {
-  switch (keyword) {
-    case "c": {
-      // (:c Name)
-      const name = extractName(rest[0]);
-      return { tag: "const", name };
-    }
+  const handler = KEYWORD_HANDLERS[keyword];
+  return handler ? handler(rest) : { tag: "unknown", raw: `:${keyword}` };
+}
 
-    case "sort": {
-      // (:sort level)
-      const level = rest[0] ? parseLevel(rest[0]) : { tag: "zero" as const };
-      return { tag: "sort", level };
-    }
+function parseLitForm(rest: SexpNode[]): LeanExpr {
+  if (rest[0]?.kind === "number") return { tag: "lit", value: rest[0].value };
+  if (rest[0]?.kind === "string") return { tag: "lit", value: rest[0].value };
+  return { tag: "lit", value: 0 };
+}
 
-    case "lit": {
-      // (:lit value) - number or "string"
-      if (rest[0]?.kind === "number") {
-        return { tag: "lit", value: rest[0].value };
-      }
-      if (rest[0]?.kind === "string") {
-        return { tag: "lit", value: rest[0].value };
-      }
-      return { tag: "lit", value: 0 };
-    }
+function parseLetForm(rest: SexpNode[]): LeanExpr {
+  if (rest.length < 4) return { tag: "unknown", raw: `:let(${rest.length})` };
+  return {
+    tag: "letE",
+    name: extractName(rest[0]),
+    type: sexpToLeanExpr(rest[1]),
+    value: sexpToLeanExpr(rest[2]),
+    body: sexpToLeanExpr(rest[3]),
+  };
+}
 
-    case "forall": {
-      // (:forall name type body [:i|:si|:ii])
-      return parseBinderForm("forallE", rest);
-    }
+function parseProjForm(rest: SexpNode[]): LeanExpr {
+  const typeName = extractName(rest[0]);
+  const idx = rest[1]?.kind === "number" ? rest[1].value : 0;
+  const expr = rest[2] ? sexpToLeanExpr(rest[2]) : { tag: "unknown" as const, raw: "" };
+  return { tag: "proj", typeName, idx, expr };
+}
 
-    case "lambda": {
-      // (:lambda name type body [:i|:si|:ii])
-      return parseBinderForm("lambda", rest);
-    }
-
-    case "let": {
-      // (:let name type value body)
-      if (rest.length < 4) return { tag: "unknown", raw: `:let(${rest.length})` };
-      return {
-        tag: "letE",
-        name: extractName(rest[0]),
-        type: sexpToLeanExpr(rest[1]),
-        value: sexpToLeanExpr(rest[2]),
-        body: sexpToLeanExpr(rest[3]),
-      };
-    }
-
-    case "fv": {
-      // (:fv name)
-      return { tag: "fvar", name: extractName(rest[0]) };
-    }
-
-    case "mv":
-    case "mvd": {
-      // (:mv name) or (:mvd name)
-      return { tag: "mvar", name: extractName(rest[0]) };
-    }
-
-    case "proj": {
-      // (:proj typeName idx inner)
-      const typeName = extractName(rest[0]);
-      const idx = rest[1]?.kind === "number" ? rest[1].value : 0;
-      const expr = rest[2] ? sexpToLeanExpr(rest[2]) : { tag: "unknown" as const, raw: "" };
-      return { tag: "proj", typeName, idx, expr };
-    }
-
-    case "subst": {
-      // (:subst callee args...) → treat as application
-      if (rest.length === 0) return { tag: "unknown", raw: ":subst" };
-      const fn = sexpToLeanExpr(rest[0]);
-      const args = rest.slice(1).map(sexpToLeanExpr);
-      return { tag: "app", fn, args };
-    }
-
-    default:
-      return { tag: "unknown", raw: `:${keyword}` };
-  }
+function parseSubstForm(rest: SexpNode[]): LeanExpr {
+  if (rest.length === 0) return { tag: "unknown", raw: ":subst" };
+  const fn = sexpToLeanExpr(rest[0]);
+  const args = rest.slice(1).map(sexpToLeanExpr);
+  return { tag: "app", fn, args };
 }
 
 function parseBinderForm(
@@ -207,49 +180,44 @@ function extractName(node: SexpNode | undefined): string {
 
 function parseLevel(node: SexpNode): LeanLevel {
   if (node.kind === "number") {
-    if (node.value === 0) return { tag: "zero" };
-    return { tag: "num", value: node.value };
+    return node.value === 0 ? { tag: "zero" } : { tag: "num", value: node.value };
   }
-
   if (node.kind === "atom") {
     return { tag: "param", name: node.value };
   }
-
   if (node.kind === "list" && node.children.length > 0) {
-    const head = node.children[0];
+    return parseLevelList(node.children);
+  }
+  return { tag: "zero" };
+}
 
-    // (+ base offset)
-    if (head.kind === "atom" && head.value === "+") {
-      const base = parseLevel(node.children[1]);
-      const offset = node.children[2]?.kind === "number" ? node.children[2].value : 1;
-      return { tag: "succ", base, offset };
-    }
+function parseLevelList(children: SexpNode[]): LeanLevel {
+  const head = children[0];
 
-    // (:max a b)
-    if (head.kind === "keyword" && head.value === "max") {
-      return {
-        tag: "max",
-        a: parseLevel(node.children[1]),
-        b: parseLevel(node.children[2]),
-      };
-    }
+  if (head.kind === "atom" && head.value === "+") {
+    const base = parseLevel(children[1]);
+    const offset = children[2]?.kind === "number" ? children[2].value : 1;
+    return { tag: "succ", base, offset };
+  }
 
-    // (:imax a b)
-    if (head.kind === "keyword" && head.value === "imax") {
-      return {
-        tag: "imax",
-        a: parseLevel(node.children[1]),
-        b: parseLevel(node.children[2]),
-      };
-    }
-
-    // (:mv name)
-    if (head.kind === "keyword" && head.value === "mv") {
-      return { tag: "mvar", name: extractName(node.children[1]) };
-    }
+  if (head.kind === "keyword") {
+    return parseLevelKeyword(head.value, children);
   }
 
   return { tag: "zero" };
+}
+
+function parseLevelKeyword(keyword: string, children: SexpNode[]): LeanLevel {
+  switch (keyword) {
+    case "max":
+      return { tag: "max", a: parseLevel(children[1]), b: parseLevel(children[2]) };
+    case "imax":
+      return { tag: "imax", a: parseLevel(children[1]), b: parseLevel(children[2]) };
+    case "mv":
+      return { tag: "mvar", name: extractName(children[1]) };
+    default:
+      return { tag: "zero" };
+  }
 }
 
 // ─── ユーティリティ ───

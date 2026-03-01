@@ -6,7 +6,7 @@ import { sexpToLeanExpr, type LeanExpr } from "../sexp/lean-expr.js";
 import { classify } from "./classifier.js";
 import { parseStructure, parseStructureFromExpr } from "./structure-parser.js";
 import { parseInductive, parseInductiveFromExpr } from "./inductive-parser.js";
-import { parseTheorem, parseTheoremFromExpr } from "./theorem-parser.js";
+import { parseTheoremFromExpr, parseTheorem } from "./theorem-parser.js";
 import { parseDef } from "./def-parser.js";
 import { parseDefFromExpr } from "./def-parser.js";
 
@@ -79,66 +79,82 @@ export function extractFromInspectResults(
     }
 
     try {
-      switch (kind) {
-        case "structure": {
-          const ctorName = info.inductInfo?.ctors[0];
-          const ctorInfo = ctorName ? inspectResults.get(ctorName) : undefined;
-          if (ctorInfo) {
-            const ctorExpr = tryParseSexp(ctorInfo.type?.sexp);
-            if (ctorExpr) {
-              declarations.push(parseStructureFromExpr(name, info, ctorExpr));
-            } else {
-              declarations.push(parseStructure(name, info, ctorInfo));
-            }
-          }
-          break;
-        }
-        case "inductive": {
-          const ctorExprs = new Map<string, LeanExpr>();
-          const ctorInfos = new Map<string, EnvInspectResponse>();
-          let allHaveSexp = true;
-
-          for (const cn of info.inductInfo?.ctors ?? []) {
-            const ci = inspectResults.get(cn);
-            if (ci) {
-              ctorInfos.set(cn, ci);
-              const expr = tryParseSexp(ci.type?.sexp);
-              if (expr) {
-                ctorExprs.set(cn, expr);
-              } else {
-                allHaveSexp = false;
-              }
-            }
-          }
-
-          if (allHaveSexp && ctorExprs.size > 0) {
-            declarations.push(parseInductiveFromExpr(name, info, ctorExprs));
-          } else {
-            declarations.push(parseInductive(name, info, ctorInfos));
-          }
-          break;
-        }
-        case "theorem":
-          if (typeExpr) {
-            declarations.push(parseTheoremFromExpr(name, typeExpr));
-          } else {
-            declarations.push(parseTheorem(name, info));
-          }
-          break;
-        case "def":
-          if (typeExpr) {
-            declarations.push(parseDefFromExpr(name, typeExpr));
-          } else {
-            declarations.push(parseDef(name, info));
-          }
-          break;
-      }
+      const decl = parseDecl({ kind, name, info, typeExpr }, inspectResults);
+      if (decl) declarations.push(decl);
     } catch (err) {
       errors.push({ name, error: String(err) });
     }
   }
 
   return { declarations, skipped, errors };
+}
+
+interface DeclContext {
+  kind: string;
+  name: string;
+  info: EnvInspectResponse;
+  typeExpr: LeanExpr | undefined;
+}
+
+function parseDecl(
+  ctx: DeclContext,
+  inspectResults: Map<string, EnvInspectResponse>
+): LeanDecl | undefined {
+  const { kind, name, info, typeExpr } = ctx;
+  switch (kind) {
+    case "structure":
+      return parseStructureDecl(name, info, inspectResults);
+    case "inductive":
+      return parseInductiveDecl(name, info, inspectResults);
+    case "theorem":
+      return typeExpr ? parseTheoremFromExpr(name, typeExpr) : parseTheorem(name, info);
+    case "def":
+      return typeExpr ? parseDefFromExpr(name, typeExpr) : parseDef(name, info);
+    default:
+      return undefined;
+  }
+}
+
+function parseStructureDecl(
+  name: string,
+  info: EnvInspectResponse,
+  inspectResults: Map<string, EnvInspectResponse>
+): LeanDecl | undefined {
+  const ctorName = info.inductInfo?.ctors[0];
+  const ctorInfo = ctorName ? inspectResults.get(ctorName) : undefined;
+  if (!ctorInfo) return undefined;
+
+  const ctorExpr = tryParseSexp(ctorInfo.type?.sexp);
+  return ctorExpr
+    ? parseStructureFromExpr(name, info, ctorExpr)
+    : parseStructure(name, info, ctorInfo);
+}
+
+function parseInductiveDecl(
+  name: string,
+  info: EnvInspectResponse,
+  inspectResults: Map<string, EnvInspectResponse>
+): LeanDecl {
+  const ctorExprs = new Map<string, LeanExpr>();
+  const ctorInfos = new Map<string, EnvInspectResponse>();
+  let allHaveSexp = true;
+
+  for (const cn of info.inductInfo?.ctors ?? []) {
+    const ci = inspectResults.get(cn);
+    if (ci) {
+      ctorInfos.set(cn, ci);
+      const expr = tryParseSexp(ci.type?.sexp);
+      if (expr) {
+        ctorExprs.set(cn, expr);
+      } else {
+        allHaveSexp = false;
+      }
+    }
+  }
+
+  return allHaveSexp && ctorExprs.size > 0
+    ? parseInductiveFromExpr(name, info, ctorExprs)
+    : parseInductive(name, info, ctorInfos);
 }
 
 /** inspect 結果から inductInfo を持つ名前を収集 */

@@ -1,5 +1,5 @@
 import type { LeanStructure, IRField, IRTypeParam } from "../ir/types.js";
-import type { EnvInspectResponse, InductInfo } from "../pantograph/protocol.js";
+import type { EnvInspectResponse } from "../pantograph/protocol.js";
 import { resolveType, resolveTypeFromExpr } from "./type-resolver.js";
 import type { LeanExpr } from "../sexp/lean-expr.js";
 import { getAppHeadName } from "../sexp/lean-expr.js";
@@ -14,7 +14,7 @@ import { getAppHeadName } from "../sexp/lean-expr.js";
  */
 export function parseStructure(
   name: string,
-  info: EnvInspectResponse,
+  _info: EnvInspectResponse,
   ctorInfo: EnvInspectResponse
 ): LeanStructure {
   const fields = extractFieldsFromCtorType(ctorInfo.type?.pp ?? "");
@@ -34,56 +34,54 @@ export function parseStructure(
  * or: `Type1 → Type2 → StructName`（名前なしの場合）
  */
 function extractFieldsFromCtorType(pp: string): IRField[] {
-  const fields: IRField[] = [];
+  const fields = extractNamedFields(pp);
+  return fields.length > 0 ? fields : extractUnnamedFields(pp);
+}
 
-  // 括弧の対応を考慮してトップレベルの `(name : Type) → ...` を抽出
+/** 括弧の対応を考慮してトップレベルの `(name : Type) → ...` を抽出 */
+function extractNamedFields(pp: string): IRField[] {
+  const fields: IRField[] = [];
   let pos = 0;
+
   while (pos < pp.length) {
-    // `(` で始まるパラメータを探す
     if (pp[pos] === "(") {
       const closeIdx = findMatchingParen(pp, pos);
       if (closeIdx < 0) break;
-      const inner = pp.slice(pos + 1, closeIdx).trim();
-
-      // `name : Type` 形式か確認
-      const colonIdx = inner.indexOf(":");
-      if (colonIdx > 0) {
-        const fieldName = inner.slice(0, colonIdx).trim();
-        const typeStr = inner.slice(colonIdx + 1).trim();
-
-        if (/^\w+$/.test(fieldName)) {
-          const hasDefault =
-            typeStr.startsWith("optParam") || typeStr.startsWith("autoParam");
-          const cleanType = hasDefault
-            ? extractOptParamType(typeStr)
-            : typeStr;
-
-          fields.push({
-            name: fieldName,
-            type: resolveType(cleanType),
-            hasDefault,
-          });
-        }
-      }
+      const field = parseParenField(pp.slice(pos + 1, closeIdx).trim());
+      if (field) fields.push(field);
       pos = closeIdx + 1;
     } else {
       pos++;
     }
   }
 
-  // 名前付きパラメータが見つからない場合、無名パラメータを試行
-  if (fields.length === 0) {
-    const parts = splitTopLevelArrows(pp);
-    // 最後の要素は戻り値型なのでスキップ
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i].replace(/^\(/, "").replace(/\)$/, "").trim();
-      if (part) {
-        fields.push({
-          name: `field${i + 1}`,
-          type: resolveType(part),
-          hasDefault: false,
-        });
-      }
+  return fields;
+}
+
+/** `name : Type` 形式のフィールドをパース */
+function parseParenField(inner: string): IRField | undefined {
+  const colonIdx = inner.indexOf(":");
+  if (colonIdx <= 0) return undefined;
+
+  const fieldName = inner.slice(0, colonIdx).trim();
+  const typeStr = inner.slice(colonIdx + 1).trim();
+  if (!/^\w+$/.test(fieldName)) return undefined;
+
+  const hasDefault = typeStr.startsWith("optParam") || typeStr.startsWith("autoParam");
+  const cleanType = hasDefault ? extractOptParamType(typeStr) : typeStr;
+
+  return { name: fieldName, type: resolveType(cleanType), hasDefault };
+}
+
+/** 名前付きパラメータが見つからない場合、無名パラメータを試行 */
+function extractUnnamedFields(pp: string): IRField[] {
+  const parts = splitTopLevelArrows(pp);
+  const fields: IRField[] = [];
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i].replace(/^\(/, "").replace(/\)$/, "").trim();
+    if (part) {
+      fields.push({ name: `field${i + 1}`, type: resolveType(part), hasDefault: false });
     }
   }
 

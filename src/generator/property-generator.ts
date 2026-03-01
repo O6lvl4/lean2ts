@@ -1,6 +1,6 @@
 import type { LeanDecl, LeanTheorem, IRProp, IRExpr, IRParam } from "../ir/types.js";
 import { renderArbitrary } from "./arbitrary-generator.js";
-import { toCamelCase, joinBlocks, capitalize } from "./codegen-utils.js";
+import { toCamelCase, joinBlocks } from "./codegen-utils.js";
 
 /**
  * 定理 IR から fast-check プロパティテストを生成する。

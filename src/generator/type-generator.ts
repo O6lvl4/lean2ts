@@ -3,7 +3,6 @@ import type {
   LeanStructure,
   LeanInductive,
   IRType,
-  IRField,
 } from "../ir/types.js";
 import { toCamelCase, capitalize, joinBlocks } from "./codegen-utils.js";
 

@@ -19,6 +19,8 @@ export type SexpNode =
 
 // ─── Tokenizer ───
 
+const IDENT_CHAR = /[a-zA-Z0-9_.'α-ωΑ-Ω\u2070-\u209F+×]/;
+
 export function tokenize(input: string): SexpToken[] {
   const tokens: SexpToken[] = [];
   let pos = 0;
@@ -26,92 +28,61 @@ export function tokenize(input: string): SexpToken[] {
   while (pos < input.length) {
     const ch = input[pos];
 
-    // whitespace
-    if (/\s/.test(ch)) {
-      pos++;
-      continue;
-    }
+    if (/\s/.test(ch)) { pos++; continue; }
+    if (ch === "(") { tokens.push({ kind: "lparen" }); pos++; continue; }
+    if (ch === ")") { tokens.push({ kind: "rparen" }); pos++; continue; }
+    if (ch === '"') { pos = readString(input, pos, tokens); continue; }
+    if (ch === ":") { pos = readKeyword(input, pos, tokens); continue; }
+    if (IDENT_CHAR.test(ch)) { pos = readIdentOrNumber(input, pos, tokens); continue; }
 
-    // parentheses
-    if (ch === "(") {
-      tokens.push({ kind: "lparen" });
-      pos++;
-      continue;
-    }
-    if (ch === ")") {
-      tokens.push({ kind: "rparen" });
-      pos++;
-      continue;
-    }
-
-    // quoted string
-    if (ch === '"') {
-      pos++;
-      let str = "";
-      while (pos < input.length && input[pos] !== '"') {
-        if (input[pos] === "\\" && pos + 1 < input.length) {
-          pos++;
-          str += input[pos];
-        } else {
-          str += input[pos];
-        }
-        pos++;
-      }
-      pos++; // skip closing "
-      tokens.push({ kind: "string", value: str });
-      continue;
-    }
-
-    // keyword (starts with :)
-    if (ch === ":") {
-      pos++;
-      let kw = "";
-      while (pos < input.length && /[a-zA-Z_]/.test(input[pos])) {
-        kw += input[pos];
-        pos++;
-      }
-      tokens.push({ kind: "keyword", value: kw });
-      continue;
-    }
-
-    // number or identifier
-    if (/[a-zA-Z0-9_.'α-ωΑ-Ω\u2070-\u209F]/.test(ch)) {
-      let word = "";
-      while (
-        pos < input.length &&
-        /[a-zA-Z0-9_.'α-ωΑ-Ω\u2070-\u209F]/.test(input[pos])
-      ) {
-        word += input[pos];
-        pos++;
-      }
-      // pure number?
-      if (/^\d+$/.test(word)) {
-        tokens.push({ kind: "number", value: Number(word) });
-      } else {
-        tokens.push({ kind: "ident", value: word });
-      }
-      continue;
-    }
-
-    // special unicode: +, ×, etc. as ident chars
-    if (ch === "+" || ch === "×") {
-      tokens.push({ kind: "ident", value: ch });
-      pos++;
-      continue;
-    }
-
-    // underscore as standalone atom
-    if (ch === "_") {
-      tokens.push({ kind: "ident", value: "_" });
-      pos++;
-      continue;
-    }
-
-    // skip unknown
+    // skip unknown character
     pos++;
   }
 
   return tokens;
+}
+
+function readString(input: string, startPos: number, tokens: SexpToken[]): number {
+  let pos = startPos + 1; // skip opening "
+  let str = "";
+  while (pos < input.length && input[pos] !== '"') {
+    if (input[pos] === "\\" && pos + 1 < input.length) {
+      pos++;
+      str += input[pos];
+    } else {
+      str += input[pos];
+    }
+    pos++;
+  }
+  pos++; // skip closing "
+  tokens.push({ kind: "string", value: str });
+  return pos;
+}
+
+function readKeyword(input: string, startPos: number, tokens: SexpToken[]): number {
+  let pos = startPos + 1; // skip :
+  let kw = "";
+  while (pos < input.length && /[a-zA-Z_]/.test(input[pos])) {
+    kw += input[pos];
+    pos++;
+  }
+  tokens.push({ kind: "keyword", value: kw });
+  return pos;
+}
+
+function readIdentOrNumber(input: string, startPos: number, tokens: SexpToken[]): number {
+  let pos = startPos;
+  let word = "";
+  while (pos < input.length && IDENT_CHAR.test(input[pos])) {
+    word += input[pos];
+    pos++;
+  }
+  if (/^\d+$/.test(word)) {
+    tokens.push({ kind: "number", value: Number(word) });
+  } else {
+    tokens.push({ kind: "ident", value: word });
+  }
+  return pos;
 }
 
 // ─── Parser ───

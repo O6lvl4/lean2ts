@@ -57,9 +57,7 @@ function extractVariantFields(typePp: string, parentName: string): IRField[] {
 
   // 名前付きパラメータ `(name : Type) → ...`
   const namedParamRegex = /\((\w+)\s*:\s*([^)]+)\)\s*→/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = namedParamRegex.exec(typePp)) !== null) {
+  for (const match of typePp.matchAll(namedParamRegex)) {
     fields.push({
       name: match[1],
       type: resolveType(match[2].trim()),
