@@ -34,11 +34,9 @@ export async function extractFromConstants(
   client: PantographClient,
   constants: string[]
 ): Promise<ExtractionResult> {
-  const declarations: LeanDecl[] = [];
-  const skipped: string[] = [];
+  const inspectResults = new Map<string, EnvInspectResponse>();
   const errors: Array<{ name: string; error: string }> = [];
 
-  const inspectResults = new Map<string, EnvInspectResponse>();
   for (const name of constants) {
     try {
       const info = await client.inspect(name);
@@ -48,83 +46,9 @@ export async function extractFromConstants(
     }
   }
 
-  for (const name of constants) {
-    const info = inspectResults.get(name);
-    if (!info) continue;
-
-    // sexp があればパースして LeanExpr を取得
-    const typeExpr = tryParseSexp(info.type?.sexp);
-
-    const kind = classify(name, info, typeExpr);
-
-    if (kind === "skip") {
-      skipped.push(name);
-      continue;
-    }
-
-    try {
-      switch (kind) {
-        case "structure": {
-          const ctorName = info.inductInfo?.ctors[0];
-          const ctorInfo = ctorName ? inspectResults.get(ctorName) : undefined;
-          if (ctorInfo) {
-            const ctorExpr = tryParseSexp(ctorInfo.type?.sexp);
-            if (ctorExpr) {
-              declarations.push(parseStructureFromExpr(name, info, ctorExpr));
-            } else {
-              declarations.push(parseStructure(name, info, ctorInfo));
-            }
-          }
-          break;
-        }
-        case "inductive": {
-          const ctorExprs = new Map<string, LeanExpr>();
-          const ctorInfos = new Map<string, EnvInspectResponse>();
-          let allHaveSexp = true;
-
-          for (const ctorName of info.inductInfo?.ctors ?? []) {
-            const ci = inspectResults.get(ctorName);
-            if (ci) {
-              ctorInfos.set(ctorName, ci);
-              const expr = tryParseSexp(ci.type?.sexp);
-              if (expr) {
-                ctorExprs.set(ctorName, expr);
-              } else {
-                allHaveSexp = false;
-              }
-            }
-          }
-
-          if (allHaveSexp && ctorExprs.size > 0) {
-            declarations.push(parseInductiveFromExpr(name, info, ctorExprs));
-          } else {
-            declarations.push(parseInductive(name, info, ctorInfos));
-          }
-          break;
-        }
-        case "theorem": {
-          if (typeExpr) {
-            declarations.push(parseTheoremFromExpr(name, typeExpr));
-          } else {
-            declarations.push(parseTheorem(name, info));
-          }
-          break;
-        }
-        case "def": {
-          if (typeExpr) {
-            declarations.push(parseDefFromExpr(name, typeExpr));
-          } else {
-            declarations.push(parseDef(name, info));
-          }
-          break;
-        }
-      }
-    } catch (err) {
-      errors.push({ name, error: String(err) });
-    }
-  }
-
-  return { declarations, skipped, errors };
+  const result = extractFromInspectResults(constants, inspectResults);
+  result.errors.push(...errors);
+  return result;
 }
 
 /**
@@ -139,12 +63,15 @@ export function extractFromInspectResults(
   const skipped: string[] = [];
   const errors: Array<{ name: string; error: string }> = [];
 
+  // 帰納型名を収集（子宣言のフィルタリング用）
+  const inductiveNames = collectInductiveNames(inspectResults);
+
   for (const name of constants) {
     const info = inspectResults.get(name);
     if (!info) continue;
 
     const typeExpr = tryParseSexp(info.type?.sexp);
-    const kind = classify(name, info, typeExpr);
+    const kind = classify(name, info, typeExpr, inductiveNames);
 
     if (kind === "skip") {
       skipped.push(name);
@@ -212,6 +139,19 @@ export function extractFromInspectResults(
   }
 
   return { declarations, skipped, errors };
+}
+
+/** inspect 結果から inductInfo を持つ名前を収集 */
+function collectInductiveNames(
+  inspectResults: Map<string, EnvInspectResponse>
+): Set<string> {
+  const names = new Set<string>();
+  for (const [name, info] of inspectResults) {
+    if (info.inductInfo) {
+      names.add(name);
+    }
+  }
+  return names;
 }
 
 function tryParseSexp(sexp: string | undefined): LeanExpr | undefined {
