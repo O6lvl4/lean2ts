@@ -1,0 +1,228 @@
+{
+  "processFile": {
+    "newConstants": [
+      "RecordType",
+      "RecordType.revenue",
+      "RecordType.salary",
+      "RecordType.rec",
+      "RecordType.casesOn",
+      "RevenueInput",
+      "RevenueInput.mk",
+      "RevenueInput.monthlyRevenue",
+      "RevenueInput.expenses",
+      "totalExpenses",
+      "totalExpenses_empty",
+      "Shape",
+      "Shape.circle",
+      "Shape.rect",
+      "Shape.rec",
+      "Shape.casesOn",
+      "Pair",
+      "Pair.mk",
+      "nat_pos_or_zero",
+      "listLength"
+    ]
+  },
+  "inspect": {
+    "RecordType": {
+      "type": { "pp": "Type", "sexp": "(:sort 1)" },
+      "inductInfo": {
+        "numParams": 0,
+        "numIndices": 0,
+        "all": ["RecordType"],
+        "ctors": ["RecordType.revenue", "RecordType.salary"],
+        "isRec": false,
+        "isReflexive": false,
+        "isNested": false
+      }
+    },
+    "RecordType.revenue": {
+      "type": { "pp": "RecordType", "sexp": "(:c RecordType)" },
+      "constructorInfo": {
+        "induct": "RecordType",
+        "cidx": 0,
+        "numParams": 0,
+        "numFields": 0
+      }
+    },
+    "RecordType.salary": {
+      "type": { "pp": "RecordType", "sexp": "(:c RecordType)" },
+      "constructorInfo": {
+        "induct": "RecordType",
+        "cidx": 1,
+        "numParams": 0,
+        "numFields": 0
+      }
+    },
+    "RecordType.rec": {
+      "type": { "pp": "{motive : RecordType → Sort u_1} → motive RecordType.revenue → motive RecordType.salary → (t : RecordType) → motive t" },
+      "recursorInfo": {
+        "all": ["RecordType"],
+        "numParams": 0,
+        "numIndices": 0,
+        "numMotives": 1,
+        "numMinors": 2,
+        "rules": [
+          { "ctor": "RecordType.revenue", "nFields": 0, "rhs": { "pp": "fun motive revenue salary => revenue" } },
+          { "ctor": "RecordType.salary", "nFields": 0, "rhs": { "pp": "fun motive revenue salary => salary" } }
+        ]
+      }
+    },
+    "RecordType.casesOn": {
+      "type": { "pp": "{motive : RecordType → Sort u_1} → (t : RecordType) → motive RecordType.revenue → motive RecordType.salary → motive t" },
+      "recursorInfo": {
+        "all": ["RecordType"],
+        "numParams": 0,
+        "numIndices": 0,
+        "numMotives": 1,
+        "numMinors": 2,
+        "rules": []
+      }
+    },
+    "RevenueInput": {
+      "type": { "pp": "Type", "sexp": "(:sort 1)" },
+      "inductInfo": {
+        "numParams": 0,
+        "numIndices": 0,
+        "all": ["RevenueInput"],
+        "ctors": ["RevenueInput.mk"],
+        "isRec": false,
+        "isReflexive": false,
+        "isNested": false
+      }
+    },
+    "RevenueInput.mk": {
+      "type": {
+        "pp": "(monthlyRevenue : Nat) → (expenses : optParam (List (String × Nat)) []) → RevenueInput",
+        "sexp": "(:forall monthlyRevenue (:c Nat) (:forall expenses ((:c optParam) ((:c List) ((:c Prod) (:c String) (:c Nat))) ((:c List.nil) ((:c Prod) (:c String) (:c Nat)))) (:c RevenueInput)))"
+      },
+      "constructorInfo": {
+        "induct": "RevenueInput",
+        "cidx": 0,
+        "numParams": 0,
+        "numFields": 2
+      }
+    },
+    "RevenueInput.monthlyRevenue": {
+      "type": {
+        "pp": "RevenueInput → Nat",
+        "sexp": "(:forall a (:c RevenueInput) (:c Nat))"
+      }
+    },
+    "RevenueInput.expenses": {
+      "type": {
+        "pp": "RevenueInput → List (String × Nat)",
+        "sexp": "(:forall a (:c RevenueInput) ((:c List) ((:c Prod) (:c String) (:c Nat))))"
+      }
+    },
+    "totalExpenses": {
+      "type": {
+        "pp": "(input : RevenueInput) → Nat",
+        "sexp": "(:forall input (:c RevenueInput) (:c Nat))"
+      }
+    },
+    "totalExpenses_empty": {
+      "type": {
+        "pp": "∀ (input : RevenueInput), input.expenses = [] → totalExpenses input = 0",
+        "sexp": "(:forall input (:c RevenueInput) (:forall h ((:c Eq) ((:c List) ((:c Prod) (:c String) (:c Nat))) (:proj RevenueInput 1 0) ((:c List.nil) ((:c Prod) (:c String) (:c Nat)))) ((:c Eq) (:c Nat) ((:c totalExpenses) 1) ((:c OfNat.ofNat) (:c Nat) (:lit 0) ((:c instOfNatNat) (:lit 0))))))"
+      }
+    },
+    "Shape": {
+      "type": { "pp": "Type", "sexp": "(:sort 1)" },
+      "inductInfo": {
+        "numParams": 0,
+        "numIndices": 0,
+        "all": ["Shape"],
+        "ctors": ["Shape.circle", "Shape.rect"],
+        "isRec": false,
+        "isReflexive": false,
+        "isNested": false
+      }
+    },
+    "Shape.circle": {
+      "type": {
+        "pp": "(radius : Nat) → Shape",
+        "sexp": "(:forall radius (:c Nat) (:c Shape))"
+      },
+      "constructorInfo": {
+        "induct": "Shape",
+        "cidx": 0,
+        "numParams": 0,
+        "numFields": 1
+      }
+    },
+    "Shape.rect": {
+      "type": {
+        "pp": "(width : Nat) → (height : Nat) → Shape",
+        "sexp": "(:forall width (:c Nat) (:forall height (:c Nat) (:c Shape)))"
+      },
+      "constructorInfo": {
+        "induct": "Shape",
+        "cidx": 1,
+        "numParams": 0,
+        "numFields": 2
+      }
+    },
+    "Shape.rec": {
+      "type": { "pp": "{motive : Shape → Sort u_1} → ((radius : Nat) → motive (Shape.circle radius)) → ((width height : Nat) → motive (Shape.rect width height)) → (t : Shape) → motive t" },
+      "recursorInfo": {
+        "all": ["Shape"],
+        "numParams": 0,
+        "numIndices": 0,
+        "numMotives": 1,
+        "numMinors": 2,
+        "rules": []
+      }
+    },
+    "Shape.casesOn": {
+      "type": { "pp": "{motive : Shape → Sort u_1} → (t : Shape) → ((radius : Nat) → motive (Shape.circle radius)) → ((width height : Nat) → motive (Shape.rect width height)) → motive t" },
+      "recursorInfo": {
+        "all": ["Shape"],
+        "numParams": 0,
+        "numIndices": 0,
+        "numMotives": 1,
+        "numMinors": 2,
+        "rules": []
+      }
+    },
+    "Pair": {
+      "type": {
+        "pp": "Type → Type → Type",
+        "sexp": "(:forall α (:sort 1) (:forall β (:sort 1) (:sort 1)))"
+      },
+      "inductInfo": {
+        "numParams": 2,
+        "numIndices": 0,
+        "all": ["Pair"],
+        "ctors": ["Pair.mk"],
+        "isRec": false,
+        "isReflexive": false,
+        "isNested": false
+      }
+    },
+    "Pair.mk": {
+      "type": {
+        "pp": "{α : Type} → {β : Type} → (fst : α) → (snd : β) → Pair α β",
+        "sexp": "(:forall α (:sort 1) (:forall β (:sort 1) (:forall fst 1 (:forall snd 1 ((:c Pair) 3 2))) :i) :i)"
+      },
+      "constructorInfo": {
+        "induct": "Pair",
+        "cidx": 0,
+        "numParams": 2,
+        "numFields": 2
+      }
+    },
+    "nat_pos_or_zero": {
+      "type": {
+        "pp": "∀ (n : Nat), n = 0 ∨ n > 0",
+        "sexp": "(:forall n (:c Nat) ((:c Or) ((:c Eq) (:c Nat) 0 ((:c OfNat.ofNat) (:c Nat) (:lit 0) ((:c instOfNatNat) (:lit 0)))) ((:c GT.gt) (:c Nat) (:c instLTNat) 0 ((:c OfNat.ofNat) (:c Nat) (:lit 0) ((:c instOfNatNat) (:lit 0))))))"
+      }
+    },
+    "listLength": {
+      "type": {
+        "pp": "{α : Type} → List α → Nat",
+        "sexp": "(:forall α (:sort 1) (:forall a ((:c List) 0) (:c Nat)) :i)"
+      }
+    }
+  }
+}

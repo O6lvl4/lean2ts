@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.claude/
+
+# Real Pantograph output (machine-specific)
+test/fixtures/real-pantograph-output.json

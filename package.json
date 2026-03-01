@@ -1,0 +1,23 @@
+{
+  "name": "lean2ts",
+  "version": "0.1.0",
+  "description": "Generate TypeScript types and property tests from Lean 4 specifications",
+  "type": "module",
+  "bin": {
+    "lean2ts": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fast-check": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
