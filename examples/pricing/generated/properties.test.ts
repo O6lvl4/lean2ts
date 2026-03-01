@@ -17,6 +17,14 @@ describe("properties", () => {
     );
   });
 
+  it("discountNonneg", () => {
+    fc.assert(
+      fc.property(fc.nat(), arbDiscount, (amount, d) => {
+      return 0 <= applyDiscount(amount, d);
+      })
+    );
+  });
+
   it("taxIncreases", () => {
     fc.assert(
       fc.property(fc.nat(), fc.nat(), (amount, rate) => {

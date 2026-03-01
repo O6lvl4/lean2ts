@@ -1,16 +1,17 @@
 import type { Discount, LineItem } from "./types.js";
 
 export function lineTotal(item: LineItem): number {
-  // TODO: implement
-  return 0;
+  return item.unitPrice * item.quantity;
 }
 
 export function applyDiscount(amount: number, d: Discount): number {
-  // TODO: implement
-  return 0;
+  switch (d.tag) {
+    case "none":    return amount;
+    case "percent": return Math.max(0, amount - Math.floor(amount * d.rate / 100));
+    case "fixed":   return Math.max(0, amount - d.amount);
+  }
 }
 
 export function addTax(amount: number, rate: number): number {
-  // TODO: implement
-  return 0;
+  return amount + Math.floor(amount * rate / 100);
 }

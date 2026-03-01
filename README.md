@@ -81,7 +81,7 @@ export function addTax(amount: number, rate: number): number {
 
 ```typescript
 describe("properties", () => {
-  // discount_bounded の定理から生成
+  // discount_bounded: 割引後 ≤ 元の金額
   it("discountBounded", () => {
     fc.assert(
       fc.property(fc.nat(), arbDiscount, (amount, d) => {
@@ -90,7 +90,16 @@ describe("properties", () => {
     );
   });
 
-  // tax_increases の定理から生成
+  // discount_nonneg: 割引後 ≥ 0（Lean の Nat では自明、TS では自明ではない）
+  it("discountNonneg", () => {
+    fc.assert(
+      fc.property(fc.nat(), arbDiscount, (amount, d) => {
+        return 0 <= applyDiscount(amount, d);
+      })
+    );
+  });
+
+  // tax_increases: 税込 ≥ 税抜
   it("taxIncreases", () => {
     fc.assert(
       fc.property(fc.nat(), fc.nat(), (amount, rate) => {
@@ -115,12 +124,19 @@ function applyDiscount(amount: number, d: Discount): number {
 }
 ```
 
-JavaScript の引き算は負の値を返す。Lean の `Nat` は 0 で止まるが、TypeScript はそうではない。
+JavaScript の引き算は負の値を返す。Lean の `Nat` は 0 で止まるが、TypeScript はそうではない。`discountNonneg` テストがこれを捕まえる:
 
 ```
- FAIL  discountBounded
-   Counterexample: amount=50, d={ tag: "fixed", amount: 200 }
-   applyDiscount(50, { tag: "fixed", amount: 200 }) → -150  (≤ 50 ではない)
+ FAIL  discountNonneg
+   Counterexample: [1, {"tag":"percent","rate":200}]
+   applyDiscount(1, { tag: "percent", rate: 200 }) → -1  (≥ 0 ではない)
+```
+
+正しい実装は `Math.max(0, ...)` で Lean の Nat と同じ振る舞いにする:
+
+```typescript
+case "percent": return Math.max(0, amount - Math.floor(amount * d.rate / 100));
+case "fixed":   return Math.max(0, amount - d.amount);
 ```
 
 **Lean の証明が保証する性質を、TypeScript のテストが自動で検証する。** バグは実装直後に見つかる。

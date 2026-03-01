@@ -46,6 +46,12 @@ theorem discount_bounded (amount : Nat) (d : Discount) :
     applyDiscount amount d ≤ amount := by
   cases d <;> simp [applyDiscount] <;> omega
 
+/-- Discounted price is never negative.
+    Trivially true in Lean (Nat can't be negative),
+    but catches real bugs in TypeScript implementations. -/
+theorem discount_nonneg (amount : Nat) (d : Discount) :
+    0 ≤ applyDiscount amount d := by omega
+
 /-- Adding tax never decreases the price -/
 theorem tax_increases (amount rate : Nat) :
     amount ≤ addTax amount rate := by
