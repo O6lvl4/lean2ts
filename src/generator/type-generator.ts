@@ -4,7 +4,7 @@ import type {
   LeanInductive,
   IRType,
 } from "../ir/types.js";
-import { toCamelCase, capitalize, joinBlocks } from "./codegen-utils.js";
+import { toCamelCase, capitalize, joinBlocks, genTypeParams, safeIdent } from "./codegen-utils.js";
 
 /**
  * IR 宣言群から TypeScript 型定義コードを生成する。
@@ -36,7 +36,8 @@ function genStructure(decl: LeanStructure): string {
     })
     .join("\n");
 
-  return `export interface ${decl.name} {\n${fields}\n}`;
+  const tp = genTypeParams(decl.typeParams);
+  return `export interface ${decl.name}${tp} {\n${fields}\n}`;
 }
 
 function genInductive(decl: LeanInductive): string {
@@ -55,13 +56,15 @@ function genInductive(decl: LeanInductive): string {
     })
     .join("\n");
 
-  lines.push(`export type ${decl.name} =\n${variants};`);
+  const tp = genTypeParams(decl.typeParams);
+  const typeName = `${decl.name}${tp}`;
+  lines.push(`export type ${typeName} =\n${variants};`);
 
   // 型ガード関数
   for (const v of decl.variants) {
     const guardName = `is${capitalize(v.tag)}`;
     lines.push(
-      `export function ${guardName}(x: ${decl.name}): x is Extract<${decl.name}, { tag: "${v.tag}" }> {\n  return x.tag === "${v.tag}";\n}`
+      `export function ${guardName}${tp}(x: ${typeName}): x is Extract<${typeName}, { tag: "${v.tag}" }> {\n  return x.tag === "${v.tag}";\n}`
     );
   }
 
@@ -85,7 +88,7 @@ export function renderType(t: IRType): string {
       return t.name;
     case "function": {
       const params = t.params
-        .map((p, i) => `${p.name === "_" ? `arg${i}` : p.name}: ${renderType(p.type)}`)
+        .map((p, i) => `${safeIdent(p.name === "_" ? `arg${i}` : p.name)}: ${renderType(p.type)}`)
         .join(", ");
       return `(${params}) => ${renderType(t.returnType)}`;
     }

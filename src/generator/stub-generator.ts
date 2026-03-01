@@ -1,5 +1,5 @@
 import type { LeanDecl, LeanDef, IRType } from "../ir/types.js";
-import { toCamelCase, joinBlocks } from "./codegen-utils.js";
+import { toCamelCase, joinBlocks, genTypeParams, safeIdent } from "./codegen-utils.js";
 import { renderType } from "./type-generator.js";
 
 /**
@@ -30,13 +30,14 @@ export function generateStubs(decls: LeanDecl[]): string {
 
 function genStub(def: LeanDef): string {
   const name = toCamelCase(def.name);
+  const tp = genTypeParams(def.typeParams);
   const params = def.params
-    .map((p) => `${toCamelCase(p.name)}: ${renderType(p.type)}`)
+    .map((p) => `${safeIdent(toCamelCase(p.name))}: ${renderType(p.type)}`)
     .join(", ");
   const retType = renderType(def.returnType);
   const defaultReturn = getDefaultReturn(def.returnType);
 
-  return `export function ${name}(${params}): ${retType} {\n  // TODO: implement\n  ${defaultReturn}\n}`;
+  return `export function ${name}${tp}(${params}): ${retType} {\n  // TODO: implement\n  ${defaultReturn}\n}`;
 }
 
 function getDefaultReturn(t: IRType): string {

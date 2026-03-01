@@ -3,7 +3,7 @@ import type { PantographClient } from "../pantograph/client.js";
 import type { EnvInspectResponse } from "../pantograph/protocol.js";
 import { parseSexp } from "../sexp/parser.js";
 import { sexpToLeanExpr, type LeanExpr } from "../sexp/lean-expr.js";
-import { classify } from "./classifier.js";
+import { classify, type DeclKind } from "./classifier.js";
 import { parseStructure, parseStructureFromExpr } from "./structure-parser.js";
 import { parseInductive, parseInductiveFromExpr } from "./inductive-parser.js";
 import { parseTheoremFromExpr, parseTheorem } from "./theorem-parser.js";
@@ -63,15 +63,15 @@ export function extractFromInspectResults(
   const skipped: string[] = [];
   const errors: Array<{ name: string; error: string }> = [];
 
-  // 帰納型名を収集（子宣言のフィルタリング用）
-  const inductiveNames = collectInductiveNames(inspectResults);
+  // 構造体名を収集（フィールドプロジェクター等のフィルタリング用）
+  const structureNames = collectStructureNames(inspectResults);
 
   for (const name of constants) {
     const info = inspectResults.get(name);
     if (!info) continue;
 
     const typeExpr = tryParseSexp(info.type?.sexp);
-    const kind = classify(name, info, typeExpr, inductiveNames);
+    const kind = classify(name, info, typeExpr, structureNames);
 
     if (kind === "skip") {
       skipped.push(name);
@@ -90,7 +90,7 @@ export function extractFromInspectResults(
 }
 
 interface DeclContext {
-  kind: string;
+  kind: Exclude<DeclKind, "skip">;
   name: string;
   info: EnvInspectResponse;
   typeExpr: LeanExpr | undefined;
@@ -157,13 +157,13 @@ function parseInductiveDecl(
     : parseInductive(name, info, ctorInfos);
 }
 
-/** inspect 結果から inductInfo を持つ名前を収集 */
-function collectInductiveNames(
+/** inspect 結果から構造体（単一コンストラクタの帰納型）の名前を収集 */
+function collectStructureNames(
   inspectResults: Map<string, EnvInspectResponse>
 ): Set<string> {
   const names = new Set<string>();
   for (const [name, info] of inspectResults) {
-    if (info.inductInfo) {
+    if (info.inductInfo && info.inductInfo.ctors.length === 1) {
       names.add(name);
     }
   }

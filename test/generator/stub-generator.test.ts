@@ -12,6 +12,7 @@ describe("generateStubs", () => {
       {
         kind: "def",
         name: "totalExpenses",
+        typeParams: [],
         params: [
           {
             name: "input",
@@ -30,16 +31,56 @@ describe("generateStubs", () => {
     expect(result).toContain("return 0;");
   });
 
+  it("generates generic function stub for def with typeParams", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "def",
+        name: "swap",
+        typeParams: [{ name: "α" }, { name: "β" }],
+        params: [
+          { name: "a", type: { kind: "ref", name: "α" } },
+          { name: "b", type: { kind: "ref", name: "β" } },
+        ],
+        returnType: { kind: "tuple", elements: [{ kind: "ref", name: "β" }, { kind: "ref", name: "α" }] },
+      },
+    ];
+
+    const result = generateStubs(decls);
+    expect(result).toContain("export function swap<α, β>(a: α, b: β)");
+    expect(result).toContain("readonly [β, α]");
+  });
+
+  it("sanitizes reserved word parameter names", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "def",
+        name: "listHead",
+        typeParams: [{ name: "α" }],
+        params: [
+          { name: "xs", type: { kind: "array", element: { kind: "ref", name: "α" } } },
+          { name: "default", type: { kind: "ref", name: "α" } },
+        ],
+        returnType: { kind: "ref", name: "α" },
+      },
+    ];
+
+    const result = generateStubs(decls);
+    expect(result).toContain("default_: α");
+    expect(result).not.toContain("default:");
+  });
+
   it("imports types from types.ts when structures exist", () => {
     const decls: LeanDecl[] = [
       {
         kind: "structure",
         name: "RevenueInput",
+        typeParams: [],
         fields: [],
       },
       {
         kind: "def",
         name: "calc",
+        typeParams: [],
         params: [
           { name: "input", type: { kind: "ref", name: "RevenueInput" } },
         ],

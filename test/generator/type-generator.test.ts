@@ -48,6 +48,7 @@ describe("generateTypes", () => {
       {
         kind: "structure",
         name: "RevenueInput",
+        typeParams: [],
         fields: [
           {
             name: "monthlyRevenue",
@@ -83,6 +84,7 @@ describe("generateTypes", () => {
       {
         kind: "inductive",
         name: "RecordType",
+        typeParams: [],
         variants: [
           { name: "RecordType.revenue", tag: "revenue", fields: [] },
           { name: "RecordType.salary", tag: "salary", fields: [] },
@@ -98,11 +100,59 @@ describe("generateTypes", () => {
     expect(result).toContain("export function isSalary");
   });
 
+  it("structure with typeParams → generic interface", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "structure",
+        name: "Wrapper",
+        typeParams: [{ name: "α" }],
+        fields: [
+          {
+            name: "value",
+            type: { kind: "ref", name: "α" },
+            hasDefault: false,
+          },
+        ],
+      },
+    ];
+
+    const result = generateTypes(decls);
+    expect(result).toContain("export interface Wrapper<α>");
+    expect(result).toContain("readonly value: α;");
+  });
+
+  it("inductive with typeParams → generic union + guards", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "inductive",
+        name: "Option",
+        typeParams: [{ name: "α" }],
+        variants: [
+          {
+            name: "Option.some",
+            tag: "some",
+            fields: [
+              { name: "val", type: { kind: "ref", name: "α" }, hasDefault: false },
+            ],
+          },
+          { name: "Option.none", tag: "none", fields: [] },
+        ],
+      },
+    ];
+
+    const result = generateTypes(decls);
+    expect(result).toContain("export type Option<α> =");
+    expect(result).toContain("readonly val: α");
+    expect(result).toContain("export function isSome<α>(x: Option<α>)");
+    expect(result).toContain("export function isNone<α>(x: Option<α>)");
+  });
+
   it("inductive with fields → union with payload", () => {
     const decls: LeanDecl[] = [
       {
         kind: "inductive",
         name: "Shape",
+        typeParams: [],
         variants: [
           {
             name: "Shape.circle",

@@ -101,14 +101,20 @@ export class PantographClient {
       this.pending = [];
     });
 
-    // ready. を待つ
-    await new Promise<void>((resolve) => {
+    // ready. を待つ（タイムアウト付き）
+    const timeout = this.options.timeout ?? 30_000;
+    await new Promise<void>((resolve, reject) => {
       const check = setInterval(() => {
         if (this.ready) {
           clearInterval(check);
+          clearTimeout(timer);
           resolve();
         }
       }, 50);
+      const timer = setTimeout(() => {
+        clearInterval(check);
+        reject(new Error(`Pantograph startup timed out after ${timeout}ms`));
+      }, timeout);
     });
 
     // sexp + pp 出力を有効化
@@ -133,20 +139,26 @@ export class PantographClient {
 
     const proc = this.proc;
     return new Promise<PantographResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`Pantograph request timed out: ${command.cmd}`));
-      }, this.options.timeout ?? 30_000);
-
-      this.pending.push({
-        resolve: (resp) => {
+      const entry = {
+        resolve: (resp: PantographResponse) => {
           clearTimeout(timer);
           resolve(resp);
         },
-        reject: (err) => {
+        reject: (err: Error) => {
           clearTimeout(timer);
           reject(err);
         },
-      });
+      };
+
+      const timer = setTimeout(() => {
+        // タイムアウト時に pending キューからエントリを除去
+        // Pantograph がハングした場合、後続レスポンスのズレを防ぐ
+        const idx = this.pending.indexOf(entry);
+        if (idx >= 0) this.pending.splice(idx, 1);
+        reject(new Error(`Pantograph request timed out: ${command.cmd}`));
+      }, this.options.timeout ?? 30_000);
+
+      this.pending.push(entry);
 
       proc.stdin?.write(line + "\n");
     });

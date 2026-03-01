@@ -1,6 +1,6 @@
 import type { LeanDecl, LeanTheorem, IRProp, IRExpr, IRParam } from "../ir/types.js";
 import { renderArbitrary } from "./arbitrary-generator.js";
-import { toCamelCase, joinBlocks } from "./codegen-utils.js";
+import { toCamelCase, joinBlocks, safeIdent } from "./codegen-utils.js";
 
 /**
  * 定理 IR から fast-check プロパティテストを生成する。
@@ -22,9 +22,15 @@ export function generateProperties(decls: LeanDecl[]): string {
     blocks.push(
       `import type { ${typeDecls.map((d) => d.name).join(", ")} } from "./types.js";`
     );
-    blocks.push(
-      `import { ${typeDecls.map((d) => `arb${d.name}`).join(", ")} } from "./arbitraries.js";`
+    // typeParams 付きの型はファクトリ関数なので定数インポートから除外
+    const nonGenericTypeDecls = typeDecls.filter(
+      (d) => (d.kind === "structure" || d.kind === "inductive") && d.typeParams.length === 0
     );
+    if (nonGenericTypeDecls.length > 0) {
+      blocks.push(
+        `import { ${nonGenericTypeDecls.map((d) => `arb${d.name}`).join(", ")} } from "./arbitraries.js";`
+      );
+    }
   }
 
   // スタブのインポート
@@ -35,14 +41,21 @@ export function generateProperties(decls: LeanDecl[]): string {
     );
   }
 
+  // ジェネリック型名セット（arbitrary ファクトリ関数で定数インポート不可）
+  const genericTypeNames = new Set(
+    typeDecls
+      .filter((d) => (d.kind === "structure" || d.kind === "inductive") && d.typeParams.length > 0)
+      .map((d) => d.name)
+  );
+
   // テストブロック
-  const tests = theorems.map(genTheoremTest).join("\n\n");
+  const tests = theorems.map((t) => genTheoremTest(t, genericTypeNames)).join("\n\n");
   blocks.push(`describe("properties", () => {\n${tests}\n});`);
 
   return joinBlocks(blocks);
 }
 
-function genTheoremTest(thm: LeanTheorem): string {
+function genTheoremTest(thm: LeanTheorem, genericTypeNames: ReadonlySet<string>): string {
   const name = toCamelCase(thm.name);
   const params = thm.universals;
 
@@ -53,15 +66,11 @@ function genTheoremTest(thm: LeanTheorem): string {
   }
 
   // パラメータあり：fc.assert + fc.property
-  const arbArgs = params.map((p) => renderArbitraryForParam(p)).join(", ");
-  const paramNames = params.map((p) => toCamelCase(p.name)).join(", ");
+  const arbArgs = params.map((p) => renderArbitrary(p.type, undefined, genericTypeNames)).join(", ");
+  const paramNames = params.map((p) => safeIdent(toCamelCase(p.name))).join(", ");
   const body = renderPropCheck(thm.prop, "      ");
 
   return `  it("${name}", () => {\n    fc.assert(\n      fc.property(${arbArgs}, (${paramNames}) => {\n${body}\n      })\n    );\n  });`;
-}
-
-function renderArbitraryForParam(param: IRParam): string {
-  return renderArbitrary(param.type);
 }
 
 function renderPropCheck(prop: IRProp, indentStr: string): string {
@@ -85,7 +94,7 @@ function renderPropCheck(prop: IRProp, indentStr: string): string {
       return `${indentStr}return !(${prem}) || (${conc});`;
     }
     case "forall_in": {
-      const varName = toCamelCase(prop.variable);
+      const varName = safeIdent(toCamelCase(prop.variable));
       const coll = renderExpr(prop.collection);
       const bodyInline = renderPropInline(prop.body);
       return `${indentStr}return ${coll}.every((${varName}) => ${bodyInline});`;
@@ -130,7 +139,7 @@ function renderPropInline(prop: IRProp): string {
     case "le":
       return `${renderExpr(prop.left)} <= ${renderExpr(prop.right)}`;
     case "forall_in": {
-      const varName = toCamelCase(prop.variable);
+      const varName = safeIdent(toCamelCase(prop.variable));
       return `${renderExpr(prop.collection)}.every((${varName}) => ${renderPropInline(prop.body)})`;
     }
     case "raw":
@@ -141,7 +150,7 @@ function renderPropInline(prop: IRProp): string {
 function renderExpr(expr: IRExpr): string {
   switch (expr.kind) {
     case "var":
-      return toCamelCase(expr.name);
+      return safeIdent(toCamelCase(expr.name));
     case "call": {
       const args = expr.args.map(renderExpr).join(", ");
       return `${toCamelCase(expr.func)}(${args})`;
@@ -151,7 +160,7 @@ function renderExpr(expr: IRExpr): string {
     case "literal":
       return typeof expr.value === "string" ? `"${expr.value}"` : String(expr.value);
     case "let":
-      return `((() => { const ${expr.name} = ${renderExpr(expr.value)}; return ${renderExpr(expr.body)}; })())`;
+      return `((() => { const ${safeIdent(expr.name)} = ${renderExpr(expr.value)}; return ${renderExpr(expr.body)}; })())`;
     case "binop":
       return `(${renderExpr(expr.left)} ${expr.op} ${renderExpr(expr.right)})`;
     case "index":

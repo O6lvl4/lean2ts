@@ -145,6 +145,14 @@ export function parseDefFromExpr(
       continue;
     }
 
+    // explicit かつ型が Sort（Type / Type u）→ 型パラメータ
+    if (current.type.tag === "sort") {
+      typeParams.push({ name: current.name });
+      nameEnv.push(current.name);
+      current = current.body;
+      continue;
+    }
+
     // explicit → パラメータ
     params.push({
       name: current.name,

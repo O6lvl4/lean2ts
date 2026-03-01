@@ -48,6 +48,7 @@ describe("generateArbitraries", () => {
       {
         kind: "structure",
         name: "RevenueInput",
+        typeParams: [],
         fields: [
           {
             name: "monthlyRevenue",
@@ -69,6 +70,7 @@ describe("generateArbitraries", () => {
       {
         kind: "inductive",
         name: "RecordType",
+        typeParams: [],
         variants: [
           { name: "RecordType.revenue", tag: "revenue", fields: [] },
           { name: "RecordType.salary", tag: "salary", fields: [] },
@@ -82,11 +84,57 @@ describe("generateArbitraries", () => {
     expect(result).toContain('fc.constant({ tag: "revenue" as const })');
   });
 
+  it("structure with typeParams → factory function", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "structure",
+        name: "Wrapper",
+        typeParams: [{ name: "α" }],
+        fields: [
+          {
+            name: "value",
+            type: { kind: "ref", name: "α" },
+            hasDefault: false,
+          },
+        ],
+      },
+    ];
+
+    const result = generateArbitraries(decls);
+    expect(result).toContain("export function arbWrapper<α>(arbΑ: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α>>");
+    expect(result).toContain("value: arbΑ,");
+  });
+
+  it("inductive with typeParams → factory function", () => {
+    const decls: LeanDecl[] = [
+      {
+        kind: "inductive",
+        name: "MyOption",
+        typeParams: [{ name: "α" }],
+        variants: [
+          {
+            name: "MyOption.some",
+            tag: "some",
+            fields: [
+              { name: "val", type: { kind: "ref", name: "α" }, hasDefault: false },
+            ],
+          },
+          { name: "MyOption.none", tag: "none", fields: [] },
+        ],
+      },
+    ];
+
+    const result = generateArbitraries(decls);
+    expect(result).toContain("export function arbMyOption<α>(arbΑ: fc.Arbitrary<α>): fc.Arbitrary<MyOption<α>>");
+    expect(result).toContain("val: arbΑ");
+  });
+
   it("inductive (with fields) → fc.oneof with records", () => {
     const decls: LeanDecl[] = [
       {
         kind: "inductive",
         name: "Shape",
+        typeParams: [],
         variants: [
           {
             name: "Shape.circle",
