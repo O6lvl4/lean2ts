@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Generics — Type Parameters That Just Work
 
 Lean's type parameters map directly to TypeScript generics. Both explicit `(α : Type)` and implicit `{α : Type}` parameters become `<α>` in the generated code.

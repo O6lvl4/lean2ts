@@ -1,3 +1,5 @@
+[English](README.md)
+
 # Generics — 型パラメータとジェネリクス
 
 Lean の型パラメータ付き定義が TypeScript のジェネリクスに変換される例。

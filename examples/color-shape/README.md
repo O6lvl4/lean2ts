@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Color & Shape — Inductive Types as Discriminated Unions
 
 Lean's `inductive` types are one of its most powerful features. lean2ts converts them into TypeScript discriminated unions — the idiomatic way to model "one of several possible shapes" in TypeScript.

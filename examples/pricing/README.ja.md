@@ -1,3 +1,5 @@
+[English](README.md)
+
 # Pricing — 割引・税計算のビジネスルール
 
 料金計算における不変条件を Lean で証明し、TypeScript のプロパティテストとして自動生成する例。

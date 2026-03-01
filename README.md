@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # lean2ts
 
 **Prove it in Lean. Test it in TypeScript.**

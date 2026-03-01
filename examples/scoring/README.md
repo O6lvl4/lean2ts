@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Scoring — Proving Your Aggregation Logic Is Correct
 
 Score aggregation seems simple: add up the points. But "simple" operations have hidden assumptions. Is combining scores commutative? Does adding a bonus ever decrease the score? Does it accidentally change the maximum possible score?

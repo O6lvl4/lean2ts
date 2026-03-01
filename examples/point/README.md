@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Point — Your First lean2ts Example
 
 The simplest possible example. One structure, one function, one theorem. If you're new to lean2ts, start here.

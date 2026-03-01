@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Inventory — Conservation Laws for Business Logic
 
 In physics, energy is conserved. In inventory management, stock is conserved — reserving items moves them from `available` to `reserved`, but the total doesn't change. Shipping removes items from `reserved`, but should never touch `available`.

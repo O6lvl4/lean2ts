@@ -1,3 +1,5 @@
+[English](README.md)
+
 # lean2ts
 
 Lean 4 の形式仕様から TypeScript コードを自動生成する。

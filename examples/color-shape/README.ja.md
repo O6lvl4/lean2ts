@@ -1,3 +1,5 @@
+[English](README.md)
+
 # Color & Shape — 帰納型と判別共用体
 
 Lean の帰納型 (`inductive`) が TypeScript の判別共用体 (discriminated union) に変換される例。

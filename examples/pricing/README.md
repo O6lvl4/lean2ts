@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 # Pricing — When Lean Catches Bugs Your Tests Miss
 
 This is lean2ts's flagship example. It demonstrates something subtle and important: **Lean's natural number arithmetic silently protects you from a class of bugs that JavaScript's numbers do not.**
