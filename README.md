@@ -1,112 +1,167 @@
 # lean2ts
 
-Lean 4 の仕様を解析して TypeScript コードを自動生成するツール。
+Lean 4 の形式仕様から TypeScript コードを自動生成する。
 
-[Pantograph](https://github.com/lenianiva/Pantograph) REPL 経由で Lean の構造体・帰納型・定理・関数定義を読み取り、型安全な TypeScript の型定義・テスト・関数スタブを出力する。さらに LLM を使った `sorry` の自動証明機能も備える。
+定理はプロパティテストに、構造体は interface に、帰納型は判別共用体になる。**ビジネスルールを Lean で証明し、その保証を TypeScript のテストとして持ち込む。**
 
-## 何ができるか
+## 何が嬉しいか
 
-```
-Lean 4 ソース (.lean)
-  │
-  ├─ 構造体          →  TypeScript interface
-  ├─ 帰納型          →  判別共用体 + 型ガード関数
-  ├─ 定理            →  fast-check プロパティテスト
-  ├─ 関数定義 (def)  →  関数スタブ (TODO: implement)
-  │
-  └─ sorry (証明の穴) →  LLM + Pantograph で自動証明
-```
+料金計算のビジネスルールを例にする。
 
-## 生成例
-
-### 入力
+### Lean で仕様を書く
 
 ```lean
-structure Point where
-  x : Nat
-  y : Nat
+-- 割引種別
+inductive Discount where
+  | none
+  | percent (rate : Nat)
+  | fixed (amount : Nat)
 
-inductive Shape where
-  | circle (radius : Nat)
-  | rect (width : Nat) (height : Nat)
-  | point
+-- 割引適用（Nat の引き算は自然に 0 で下限クリップ）
+def applyDiscount (amount : Nat) (d : Discount) : Nat :=
+  match d with
+  | .none => amount
+  | .percent rate => amount - amount * rate / 100
+  | .fixed v => amount - v
 
-def double (n : Nat) : Nat := n * 2
-
-theorem add_zero (n : Nat) : n + 0 = n := by simp
+-- 税込計算
+def addTax (amount rate : Nat) : Nat :=
+  amount + amount * rate / 100
 ```
 
-### 出力
+ここまでは型と関数の定義。次がポイント:
+
+```lean
+-- ビジネスルール: 割引後の金額は元の金額を超えない
+theorem discount_bounded (amount : Nat) (d : Discount) :
+    applyDiscount amount d ≤ amount := by
+  cases d <;> simp [applyDiscount] <;> omega
+
+-- ビジネスルール: 税込は税抜以上
+theorem tax_increases (amount rate : Nat) :
+    amount ≤ addTax amount rate := by
+  simp [addTax]; omega
+```
+
+Lean はこれらの定理を**数学的に証明**する。コンパイルが通れば正しさが保証される。
+
+### lean2ts で TypeScript を生成
+
+`npx lean2ts pricing.lean` を実行すると 4 ファイルが生成される:
 
 **types.ts** — 型定義
 
 ```typescript
-export interface Point {
-  readonly x: number;
-  readonly y: number;
-}
+export type Discount =
+  | { readonly tag: "none" }
+  | { readonly tag: "percent"; readonly rate: number }
+  | { readonly tag: "fixed"; readonly amount: number };
 
-export type Shape =
-  | { readonly tag: "circle"; readonly radius: number }
-  | { readonly tag: "rect"; readonly width: number; readonly height: number }
-  | { readonly tag: "point" };
-
-export function isCircle(x: Shape): x is Extract<Shape, { tag: "circle" }> {
-  return x.tag === "circle";
+export function isPercent(x: Discount): x is Extract<Discount, { tag: "percent" }> {
+  return x.tag === "percent";
 }
-// isRect, isPoint も同様に生成
+// isNone, isFixed も生成
 ```
 
-**arbitraries.ts** — fast-check Arbitrary
+**stubs.ts** — 関数スタブ（あなたが実装する）
 
 ```typescript
-import fc from "fast-check";
+export function applyDiscount(amount: number, d: Discount): number {
+  // TODO: implement
+  return 0;
+}
 
-export const arbPoint: fc.Arbitrary<Point> = fc.record({
-  x: fc.nat(),
-  y: fc.nat(),
-});
-
-export const arbShape: fc.Arbitrary<Shape> = fc.oneof(
-  fc.record({ tag: fc.constant("circle" as const), radius: fc.nat() }),
-  fc.record({ tag: fc.constant("rect" as const), width: fc.nat(), height: fc.nat() }),
-  fc.constant({ tag: "point" as const })
-);
+export function addTax(amount: number, rate: number): number {
+  // TODO: implement
+  return 0;
+}
 ```
 
-**properties.test.ts** — プロパティテスト
+**properties.test.ts** — 定理がプロパティテストになる
 
 ```typescript
 describe("properties", () => {
-  it("addZero", () => {
+  // discount_bounded の定理から生成
+  it("discountBounded", () => {
     fc.assert(
-      fc.property(fc.nat(), (n) => {
-        return (n + 0) === n;
+      fc.property(fc.nat(), arbDiscount, (amount, d) => {
+        return applyDiscount(amount, d) <= amount;
+      })
+    );
+  });
+
+  // tax_increases の定理から生成
+  it("taxIncreases", () => {
+    fc.assert(
+      fc.property(fc.nat(), fc.nat(), (amount, rate) => {
+        return amount <= addTax(amount, rate);
       })
     );
   });
 });
 ```
 
-**stubs.ts** — 関数スタブ
+### バグのある実装を書くと、テストが落ちる
+
+TypeScript で素朴に実装してみる:
 
 ```typescript
-export function double(n: number): number {
-  // TODO: implement
-  return 0;
+function applyDiscount(amount: number, d: Discount): number {
+  switch (d.tag) {
+    case "none":    return amount;
+    case "percent": return amount - (amount * d.rate / 100);
+    case "fixed":   return amount - d.amount;  // ← バグ: 負の値になりうる
+  }
 }
 ```
 
+JavaScript の引き算は負の値を返す。Lean の `Nat` は 0 で止まるが、TypeScript はそうではない。
+
+```
+ FAIL  discountBounded
+   Counterexample: amount=50, d={ tag: "fixed", amount: 200 }
+   applyDiscount(50, { tag: "fixed", amount: 200 }) → -150  (≤ 50 ではない)
+```
+
+**Lean の証明が保証する性質を、TypeScript のテストが自動で検証する。** バグは実装直後に見つかる。
+
+> 完全な例: [`examples/pricing/`](examples/pricing/)
+
+---
+
+## 変換の全体像
+
+```
+Lean 4 ソース (.lean)
+  │
+  ├─ structure        →  interface
+  ├─ inductive        →  discriminated union + type guards
+  ├─ theorem          →  fast-check property test
+  ├─ def              →  function stub
+  │
+  └─ sorry            →  LLM + Pantograph で自動証明
+```
+
+### 型マッピング
+
+| Lean | TypeScript | fast-check |
+|---|---|---|
+| `Nat` | `number` | `fc.nat()` |
+| `Int` | `number` | `fc.integer()` |
+| `String` | `string` | `fc.string()` |
+| `Bool` | `boolean` | `fc.boolean()` |
+| `List α` | `ReadonlyArray<α>` | `fc.array(...)` |
+| `Option α` | `α \| undefined` | `fc.option(...)` |
+| `α × β` | `readonly [α, β]` | `fc.tuple(...)` |
+
 ### ジェネリクス
 
-型パラメータ付きの定義もサポートする。
+型パラメータ付きの定義もそのまま変換する。
 
 ```lean
 structure Wrapper (α : Type) where
   value : α
   label : String
-
-def swap {α β : Type} (a : α) (b : β) : β × α := (b, a)
 ```
 
 ```typescript
@@ -123,54 +178,18 @@ export function arbWrapper<α>(arbΑ: fc.Arbitrary<α>): fc.Arbitrary<Wrapper<α
     label: fc.string(),
   });
 }
-
-// stubs.ts
-export function swap<α, β>(a: α, b: β): readonly [β, α] { ... }
 ```
 
-## セットアップ
+---
 
-### 前提条件
+## sorry 自動証明
 
-- Node.js 22+
-- [Lean 4](https://leanprover.github.io/lean4/doc/setup.html)
-- [Pantograph](https://github.com/lenianiva/Pantograph)（`pantograph-repl` がビルド済み）
-
-### インストール
+Lean ファイル内の `sorry`（証明の穴）を LLM と Pantograph で自動的に埋める。
 
 ```bash
-npm install
-npm run build
-```
-
-## 使い方
-
-### コード生成
-
-```bash
-# 基本
-npx lean2ts input.lean -o ./generated
-
-# ドライラン（ファイル出力なし、stdout に表示）
-npx lean2ts input.lean --dry-run
-
-# Pantograph パスを指定
-npx lean2ts input.lean --pantograph /path/to/pantograph-repl
-
-# テスト・スタブの生成をスキップ
-npx lean2ts input.lean --no-tests --no-stubs
-```
-
-### sorry 自動証明
-
-Lean ファイル内の `sorry`（証明の穴）を LLM（Cloudflare Workers AI）と Pantograph で自動的に埋める。
-
-```bash
-# 環境変数の設定
 export CLOUDFLARE_ACCOUNT_ID=xxx
 export CLOUDFLARE_API_TOKEN=xxx
 
-# 実行
 npx lean2ts prove input.lean --verbose
 ```
 
@@ -181,10 +200,37 @@ npx lean2ts prove input.lean --verbose
 [prove] trying "simp" for zero_add (attempt 3)
 [prove] success: zero_add proved with "simp"
 
-theorem add_zero (n : Nat) : n + 0 = n := by rfl
-theorem zero_add (n : Nat) : 0 + n = n := by simp
-
 [prove] success: all sorries proved in 3 attempt(s)
+```
+
+---
+
+## セットアップ
+
+### 前提条件
+
+- Node.js 22+
+- [Lean 4](https://leanprover.github.io/lean4/doc/setup.html)
+- [Pantograph](https://github.com/lenianiva/Pantograph)
+
+### インストール
+
+```bash
+npm install
+npm run build
+```
+
+### 実行
+
+```bash
+# コード生成
+npx lean2ts input.lean -o ./generated
+
+# ドライラン
+npx lean2ts input.lean --dry-run
+
+# sorry 自動証明
+npx lean2ts prove input.lean --verbose
 ```
 
 ## CLI リファレンス
@@ -198,8 +244,8 @@ theorem zero_add (n : Nat) : 0 + n = n := by simp
 | `--modules <names...>` | Lean モジュール | — |
 | `--no-tests` | テスト生成スキップ | — |
 | `--no-stubs` | スタブ生成スキップ | — |
-| `--verbose` | Pantograph 通信ログ出力 | — |
-| `--dry-run` | 生成内容を表示（書き込みなし） | — |
+| `--verbose` | 詳細ログ | — |
+| `--dry-run` | stdout に表示（書き込みなし） | — |
 
 ### `lean2ts prove <input.lean> [options]`
 
@@ -208,102 +254,52 @@ theorem zero_add (n : Nat) : 0 + n = n := by simp
 | `--model <name>` | LLM モデル | `@cf/deepseek-ai/deepseek-r1-distill-qwen-32b` |
 | `--pantograph <path>` | pantograph-repl のパス | `pantograph-repl` |
 | `--lean-path <path>` | LEAN_PATH | — |
-| `--modules <names...>` | Lean モジュール | — |
 | `--max-attempts <n>` | 最大リトライ回数 | `3` |
-| `--verbose` | ログ出力 | — |
+| `--verbose` | 詳細ログ | — |
 
-### 環境変数（prove コマンド）
+### 環境変数（prove）
 
 | 変数 | 説明 |
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare アカウント ID |
-| `CLOUDFLARE_API_TOKEN` | API トークン（Bearer 認証） |
+| `CLOUDFLARE_API_TOKEN` | API トークン |
 | `CLOUDFLARE_API_KEY` | Global API キー（`EMAIL` と併用） |
 | `CLOUDFLARE_EMAIL` | Cloudflare メールアドレス |
-
-## Lean → TypeScript 型マッピング
-
-| Lean | TypeScript | fast-check Arbitrary |
-|---|---|---|
-| `Nat` | `number` | `fc.nat()` |
-| `Int` | `number` | `fc.integer()` |
-| `Float` | `number` | `fc.double()` |
-| `String` | `string` | `fc.string()` |
-| `Bool` | `boolean` | `fc.boolean()` |
-| `Unit` | `void` | `fc.constant(undefined)` |
-| `List α` | `ReadonlyArray<α>` | `fc.array(...)` |
-| `Option α` | `α \| undefined` | `fc.option(...)` |
-| `α × β` | `readonly [α, β]` | `fc.tuple(...)` |
-| `HashMap K V` | `ReadonlyMap<K, V>` | `fc.array(fc.tuple(...)).map(...)` |
-| `UInt8` | `number` | `fc.nat({ max: 255 })` |
-| `UInt16` | `number` | `fc.nat({ max: 65535 })` |
 
 ## アーキテクチャ
 
 ```
 src/
 ├── index.ts               エントリーポイント
-├── cli.ts                 CLI 引数パース・オーケストレーション
-├── config.ts              設定型・デフォルト値
-├── lean-ts-map.ts         Lean → TypeScript 型マッピング定義
+├── cli.ts                 CLI 引数パース
+├── lean-ts-map.ts         Lean → TypeScript 型マッピング
 │
 ├── s-expression/          S 式パーサー
-│   ├── parser.ts            トークナイザ + パーサー → SexpNode
-│   └── lean-expr.ts         SexpNode → LeanExpr AST 変換
+│   ├── parser.ts            トークナイザ + パーサー
+│   └── lean-expr.ts         SexpNode → LeanExpr AST
 │
 ├── extractor/             Lean 宣言の抽出
-│   ├── index.ts             オーケストレーター
-│   ├── classifier.ts        宣言種別の判定 (structure/inductive/theorem/def/skip)
+│   ├── classifier.ts        宣言種別の判定
 │   ├── structure-parser.ts  構造体 → IR
 │   ├── inductive-parser.ts  帰納型 → IR
 │   ├── theorem-parser.ts    定理 → IR
 │   ├── def-parser.ts        関数定義 → IR
-│   └── type-resolver.ts     Lean 型 → IRType 解決
-│
-├── ir/                    中間表現
-│   └── types.ts             LeanDecl, IRType, IRProp 等の型定義
+│   └── type-resolver.ts     Lean 型 → IRType
 │
 ├── generator/             TypeScript コード生成
-│   ├── index.ts             オーケストレーター
-│   ├── type-generator.ts    types.ts 生成
-│   ├── arbitrary-generator.ts  arbitraries.ts 生成
-│   ├── property-generator.ts   properties.test.ts 生成
-│   ├── stub-generator.ts    stubs.ts 生成
-│   └── codegen-utils.ts     共通ユーティリティ
+│   ├── type-generator.ts    types.ts
+│   ├── arbitrary-generator.ts  arbitraries.ts
+│   ├── property-generator.ts   properties.test.ts
+│   └── stub-generator.ts    stubs.ts
 │
 ├── pantograph/            Pantograph REPL クライアント
 │   ├── client.ts            JSON RPC over stdin/stdout
 │   └── protocol.ts          プロトコル型定義
 │
 └── prover/                sorry 自動証明
-    ├── index.ts             エントリーポイント
     ├── sorry-finder.ts      sorry 位置検出
     ├── proof-loop.ts        提案 → 検証ループ
-    └── tactic-llm.ts        Cloudflare Workers AI 連携
-```
-
-### パイプライン
-
-```
-.lean ファイル
-    │
-    ▼
-Pantograph REPL ──── processFile → 定数名リスト
-    │                 inspect → 型情報 (pp + sexp)
-    ▼
-S 式パーサー ──── sexp → SexpNode → LeanExpr AST
-    │
-    ▼
-Classifier ──── 宣言種別の判定
-    │
-    ▼
-Extractor ──── 各パーサーで IR に変換
-    │
-    ▼
-Generator ──── IR から TypeScript コードを生成
-    │
-    ▼
-types.ts / arbitraries.ts / properties.test.ts / stubs.ts
+    └── tactic-llm.ts        LLM 連携
 ```
 
 ## 開発
