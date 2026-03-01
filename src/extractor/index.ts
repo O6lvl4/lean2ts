@@ -1,8 +1,8 @@
 import type { LeanDecl } from "../ir/types.js";
 import type { PantographClient } from "../pantograph/client.js";
 import type { EnvInspectResponse } from "../pantograph/protocol.js";
-import { parseSexp } from "../sexp/parser.js";
-import { sexpToLeanExpr, type LeanExpr } from "../sexp/lean-expr.js";
+import { parseSexp } from "../s-expression/parser.js";
+import { sexpToLeanExpr, type LeanExpr } from "../s-expression/lean-expr.js";
 import { classify, type DeclKind } from "./classifier.js";
 import { parseStructure, parseStructureFromExpr } from "./structure-parser.js";
 import { parseInductive, parseInductiveFromExpr } from "./inductive-parser.js";

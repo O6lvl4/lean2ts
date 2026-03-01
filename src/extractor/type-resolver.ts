@@ -1,7 +1,7 @@
 import type { IRType } from "../ir/types.js";
 import { lookupPrimitive, resolveTypeConstructor } from "../lean-ts-map.js";
-import type { LeanExpr } from "../sexp/lean-expr.js";
-import { getAppHeadName } from "../sexp/lean-expr.js";
+import type { LeanExpr } from "../s-expression/lean-expr.js";
+import { getAppHeadName } from "../s-expression/lean-expr.js";
 
 export { resolveType } from "./type-resolver-pp.js";
 

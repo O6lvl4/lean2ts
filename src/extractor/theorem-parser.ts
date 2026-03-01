@@ -1,7 +1,7 @@
 import type { LeanTheorem, IRParam, IRProp, IRExpr } from "../ir/types.js";
 import { resolveTypeFromExpr } from "./type-resolver.js";
-import type { LeanExpr } from "../sexp/lean-expr.js";
-import { getAppHeadName, isPropSort } from "../sexp/lean-expr.js";
+import type { LeanExpr } from "../s-expression/lean-expr.js";
+import { getAppHeadName, isPropSort } from "../s-expression/lean-expr.js";
 
 export { parseTheorem } from "./theorem-parser-pp.js";
 

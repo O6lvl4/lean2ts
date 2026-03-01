@@ -1,6 +1,6 @@
 import type { EnvInspectResponse } from "../pantograph/protocol.js";
-import type { LeanExpr } from "../sexp/lean-expr.js";
-import { isPropSort, getAppHeadName } from "../sexp/lean-expr.js";
+import type { LeanExpr } from "../s-expression/lean-expr.js";
+import { isPropSort, getAppHeadName } from "../s-expression/lean-expr.js";
 
 export type DeclKind = "structure" | "inductive" | "theorem" | "def" | "skip";
 

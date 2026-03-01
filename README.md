@@ -247,7 +247,7 @@ src/
 ├── config.ts              設定型・デフォルト値
 ├── lean-ts-map.ts         Lean → TypeScript 型マッピング定義
 │
-├── sexp/                  S 式パーサー
+├── s-expression/          S 式パーサー
 │   ├── parser.ts            トークナイザ + パーサー → SexpNode
 │   └── lean-expr.ts         SexpNode → LeanExpr AST 変換
 │

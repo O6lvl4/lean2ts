@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseDefFromExpr } from "../../src/extractor/def-parser.js";
-import type { LeanExpr } from "../../src/sexp/lean-expr.js";
+import type { LeanExpr } from "../../src/s-expression/lean-expr.js";
 
 describe("parseDefFromExpr", () => {
   it("extracts explicit Type params as typeParams", () => {

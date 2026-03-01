@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseSexp } from "../../src/sexp/parser.js";
+import { parseSexp } from "../../src/s-expression/parser.js";
 import {
   sexpToLeanExpr,
   referencesBVar,
@@ -10,7 +10,7 @@ import {
   isPropSort,
   unfoldForalls,
   type LeanExpr,
-} from "../../src/sexp/lean-expr.js";
+} from "../../src/s-expression/lean-expr.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

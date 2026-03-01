@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tokenize, parseSexp, type SexpNode } from "../../src/sexp/parser.js";
+import { tokenize, parseSexp, type SexpNode } from "../../src/s-expression/parser.js";
 
 describe("tokenize", () => {
   it("simple constant", () => {

@@ -1,8 +1,8 @@
 import type { LeanStructure, IRField, IRTypeParam } from "../ir/types.js";
 import type { EnvInspectResponse } from "../pantograph/protocol.js";
 import { resolveType, resolveTypeFromExpr } from "./type-resolver.js";
-import type { LeanExpr } from "../sexp/lean-expr.js";
-import { getAppHeadName } from "../sexp/lean-expr.js";
+import type { LeanExpr } from "../s-expression/lean-expr.js";
+import { getAppHeadName } from "../s-expression/lean-expr.js";
 
 /**
  * 構造体（単一コンストラクタの帰納型）をパースする。

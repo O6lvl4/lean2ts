@@ -1,7 +1,7 @@
 import type { LeanDef, IRParam, IRTypeParam } from "../ir/types.js";
 import type { EnvInspectResponse } from "../pantograph/protocol.js";
 import { resolveType, resolveTypeFromExpr } from "./type-resolver.js";
-import type { LeanExpr } from "../sexp/lean-expr.js";
+import type { LeanExpr } from "../s-expression/lean-expr.js";
 
 /**
  * 関数シグネチャを抽出する。
