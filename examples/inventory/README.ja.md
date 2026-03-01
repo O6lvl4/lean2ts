@@ -1,4 +1,4 @@
-[English](README.md)
+<p align="right"><a href="README.md">English</a></p>
 
 # Inventory — 在庫管理の不変条件
 

@@ -1,4 +1,4 @@
-[English](README.md)
+<p align="right"><a href="README.md">English</a></p>
 
 # Pricing — 割引・税計算のビジネスルール
 

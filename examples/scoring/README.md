@@ -1,4 +1,4 @@
-[日本語](README.ja.md)
+<p align="right"><a href="README.ja.md">日本語</a></p>
 
 # Scoring — Proving Your Aggregation Logic Is Correct
 

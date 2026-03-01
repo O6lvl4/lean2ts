@@ -1,4 +1,4 @@
-[English](README.md)
+<p align="right"><a href="README.md">English</a></p>
 
 # Generics — 型パラメータとジェネリクス
 
