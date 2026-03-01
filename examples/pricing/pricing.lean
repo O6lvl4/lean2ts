@@ -56,3 +56,8 @@ theorem discount_nonneg (amount : Nat) (d : Discount) :
 theorem tax_increases (amount rate : Nat) :
     amount ≤ addTax amount rate := by
   simp [addTax]; omega
+
+/-- Double discount is no worse than single discount -/
+theorem double_discount_le (amount : Nat) (d : Discount) :
+    applyDiscount (applyDiscount amount d) d ≤ applyDiscount amount d := by
+  cases d <;> simp [applyDiscount] <;> omega

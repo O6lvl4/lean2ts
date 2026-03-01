@@ -32,4 +32,12 @@ describe("properties", () => {
       })
     );
   });
+
+  it("doubleDiscountLe", () => {
+    fc.assert(
+      fc.property(fc.nat(), arbDiscount, (amount, d) => {
+      return applyDiscount(applyDiscount(amount, d), d) <= applyDiscount(amount, d);
+      })
+    );
+  });
 });
